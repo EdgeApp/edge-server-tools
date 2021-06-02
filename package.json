@@ -11,13 +11,13 @@
     "lib/*"
   ],
   "scripts": {
-    "fix": "npm run lint -- --fix",
+    "fix": "yarn lint --fix",
     "prepare": "npm run build.lib && npm run build.types",
     "build.lib": "sucrase -q -t typescript,imports,jsx -d ./lib ./src",
     "build.types": "tsc",
     "start": "node -r sucrase/register src/index.ts",
     "precommit": "lint-staged && npm run prepare",
-    "lint": "eslint --ext .js,.jsx,.ts,.tsx ."
+    "lint": "eslint ."
   },
   "husky": {
     "hooks": {
@@ -29,16 +29,16 @@
   },
   "devDependencies": {
     "@babel/core": "^7.8.4",
-    "@typescript-eslint/eslint-plugin": "^2.0.0",
-    "@typescript-eslint/parser": "^2.0.0",
-    "eslint": ">=6.2.2",
-    "eslint-config-standard-kit": ">=0.14.4",
-    "eslint-plugin-import": ">=2.18.0",
-    "eslint-plugin-node": ">=9.1.0",
-    "eslint-plugin-prettier": "^3.0.0",
-    "eslint-plugin-promise": ">=4.2.1",
-    "eslint-plugin-simple-import-sort": ">=4.0.0",
-    "eslint-plugin-standard": ">=4.0.0",
+    "@typescript-eslint/eslint-plugin": "^4.26.0",
+    "@typescript-eslint/parser": "^4.26.0",
+    "eslint": "^7.22.0",
+    "eslint-config-standard-kit": "^0.15.1",
+    "eslint-plugin-import": "^2.23.4",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-prettier": "^3.4.0",
+    "eslint-plugin-promise": "^5.1.0",
+    "eslint-plugin-simple-import-sort": "^7.0.0",
+    "eslint-plugin-standard": "^5.0.0",
     "husky": ">=3.0.0",
     "lint-staged": ">=9.0.0",
     "npm-run-all": "^4.1.5",

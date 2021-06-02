@@ -140,7 +140,7 @@ export async function prepareCouch(
     for (const id of Object.keys(documents)) {
       const { _id, _rev, ...rest } = await currentDb.get(id).catch(() => ({}))
 
-      if (matchJson(documents[id], rest) === false) {
+      if (!matchJson(documents[id], rest)) {
         await currentDb.insert({ _id: id, _rev, ...documents[id] })
         console.log(`Wrote document "${id}" in database "${name}".`)
       }
@@ -300,8 +300,10 @@ export async function autoReplication(
           typeof cluster.servers[serverHostname].username === 'string' &&
           typeof cluster.servers[serverHostname].password === 'string'
         ) {
-          const sourceUsername = cluster.servers[serverHostname].username
-          const sourcePassword = cluster.servers[serverHostname].password
+          const sourceUsername: string =
+            cluster.servers[serverHostname].username
+          const sourcePassword: string =
+            cluster.servers[serverHostname].password
           const sourceUri = `https://${sourceUsername}:${sourcePassword}@${serverHostname}:6984`
           const existingDbsUri = `${sourceUri}/_all_dbs`
           let finalDbList: string[]
@@ -337,8 +339,8 @@ export async function autoReplication(
 }
 
 export interface PeriodicTask {
-  start(): void
-  stop(): void
+  start: () => void
+  stop: () => void
 
   // True once start is called, false after stop is called:
   started: boolean

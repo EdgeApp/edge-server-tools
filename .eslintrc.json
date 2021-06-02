@@ -2,7 +2,6 @@
   "extends": [
     "standard-kit/prettier",
     "standard-kit/prettier/node",
-    "standard-kit/prettier/jsx",
     "standard-kit/prettier/typescript"
   ],
   "parserOptions": {
@@ -10,6 +9,6 @@
   },
   "plugins": ["simple-import-sort"],
   "rules": {
-    "simple-import-sort/sort": "error"
+    "simple-import-sort/imports": "error"
   }
 }
