@@ -11,14 +11,14 @@
     "lib/*"
   ],
   "scripts": {
-    "fix": "yarn lint --fix",
-    "prepare": "npm-run-all clean -p build.*",
-    "clean": "rimraf lib",
     "build.lib": "sucrase -q -t typescript,imports,jsx -d ./lib ./src",
     "build.types": "tsc",
-    "start": "node -r sucrase/register src/index.ts",
+    "clean": "rimraf lib",
+    "fix": "yarn lint --fix",
+    "lint": "eslint .",
     "precommit": "lint-staged && yarn prepare",
-    "lint": "eslint ."
+    "prepare": "npm-run-all clean -p build.*",
+    "start": "node -r sucrase/register src/index.ts"
   },
   "husky": {
     "hooks": {
@@ -27,6 +27,16 @@
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": "eslint"
+  },
+  "dependencies": {
+    "@types/node": "^14.0.22",
+    "body-parser": "^1.19.0",
+    "cleaners": ">=0.2.1",
+    "commander": "^6.1.0",
+    "cors": "^2.8.5",
+    "nano": "^8.2.2",
+    "node-fetch": "^2.6.1",
+    "prop-types": ">= 15.5.10 < 16.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.8.4",
@@ -49,15 +59,5 @@
     "rimraf": "^3.0.2",
     "sucrase": "^3.12.1",
     "typescript": "^3.8.2"
-  },
-  "dependencies": {
-    "@types/node": "^14.0.22",
-    "body-parser": "^1.19.0",
-    "cleaners": ">=0.2.1",
-    "commander": "^6.1.0",
-    "cors": "^2.8.5",
-    "nano": "^8.2.2",
-    "node-fetch": "^2.6.1",
-    "prop-types": ">= 15.5.10 < 16.0.0"
   }
 }
