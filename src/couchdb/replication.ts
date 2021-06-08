@@ -1,110 +1,120 @@
+import { asArray, asMap, asObject, asString } from 'cleaners'
 import nano from 'nano'
 import fetch from 'node-fetch'
 
+import { dbUrlInfo } from '../util/db'
 import { errorCause } from '../util/error-cause'
+import { matchJson } from '../util/match-json'
+
+const asServerInfo = asObject({
+  couchUrl: asString
+})
+
+const asEdgeServersInternalResponse = asObject({
+  clusters: asArray(
+    asObject({
+      location: asString,
+      servers: asMap(asServerInfo)
+    })
+  )
+})
 
 export async function autoReplication(
   infoServerAddress: string,
   serverName: string,
   apiKey: string,
-  destinationUrl: string
+  targetUrl: string
 ): Promise<void> {
-  const uri = `https://${infoServerAddress}/v1/edgeServersInternal/${serverName}s?apiKey=${apiKey}`
   try {
-    const result = await fetch(uri, {
-      method: 'GET'
+    if (apiKey.length === 0) {
+      throw new Error('Missing info server api key')
+    }
+
+    const uri = `https://${infoServerAddress}/v1/edgeServersInternal/${serverName}s?apiKey=${apiKey}`
+    const response = await fetch(uri, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
     })
-    const resultObj = await result.json()
-    for (const cluster of resultObj.clusters) {
-      for (const serverHostname in cluster.servers) {
-        if (
-          typeof cluster.servers[serverHostname].username === 'string' &&
-          typeof cluster.servers[serverHostname].password === 'string'
-        ) {
-          const sourceUsername: string =
-            cluster.servers[serverHostname].username
-          const sourcePassword: string =
-            cluster.servers[serverHostname].password
-          const sourceUri = `https://${sourceUsername}:${sourcePassword}@${serverHostname}:6984`
-          const existingDbsUri = `${sourceUri}/_all_dbs`
-          let finalDbList: string[]
-          try {
-            const existingDbsQuery = await fetch(existingDbsUri, {
-              method: 'GET'
-            })
-            const existingDbs = await existingDbsQuery.json()
-            finalDbList = existingDbs.filter(
-              dbName => dbName !== '_users' || dbName !== '_replicator'
-            )
-            for (const db of finalDbList) {
-              const fullSourcePath = `${sourceUri}/${db}`
-              const fullDestinationPath = `${destinationUrl}/${db}`
-              await dbReplication(fullSourcePath, fullDestinationPath)
-            }
-          } catch (err) {
-            throw errorCause(
-              new Error(`Replication failed at ${serverHostname}`),
-              err
-            )
+      .then(async res => {
+        if (res.status !== 200) {
+          throw new Error(
+            `Failed fetch ${res.status} ${res.statusText} ${await res.text()}`
+          )
+        }
+        return await res.json()
+      })
+      .then(asEdgeServersInternalResponse)
+
+    for (const cluster of response.clusters) {
+      for (const key in cluster.servers) {
+        const { couchUrl: sourceUrl } = asServerInfo(cluster.servers[key])
+
+        const databases = await fetch(`${sourceUrl}/_all_dbs`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
           }
-        } else {
-          console.log(
-            `Username and Password for server ${serverHostname} does not exist, cannot attempt replication.`
+        })
+          .then(async res => await res.json())
+          .then(data => asArray(asString)(data))
+          .then(databases =>
+            databases.filter(
+              database => database !== '_users' && database !== '_replicator'
+            )
+          )
+
+        for (const database of databases) {
+          await dbReplication(
+            `${sourceUrl}/${database}`,
+            `${targetUrl}/${database}`
           )
         }
       }
     }
   } catch (err) {
-    throw errorCause(new Error(`Replication failed`), err)
+    throw errorCause(new Error(`Failed auto-replication`), err)
   }
 }
 
 export async function dbReplication(
   sourceUrl: string,
-  destinationUrl: string
+  targetUrl: string
 ): Promise<void> {
+  const source = dbUrlInfo(sourceUrl)
+  const target = dbUrlInfo(targetUrl)
+
   try {
-    const sourceUrlObj = new URL(sourceUrl)
-    const sourceHostname = sourceUrlObj.hostname
-    const sourceUsername = sourceUrlObj.username
-    const sourcePassword = sourceUrlObj.password
-    const sourceDb = sourceUrlObj.pathname
-    const destinationUrlObj = new URL(destinationUrl)
-    const destinationHostname = destinationUrlObj.hostname
-    const destinationUsername = destinationUrlObj.username
-    const destinationPassword = destinationUrlObj.password
-    const destinationDb = destinationUrlObj.pathname
-    const sourceUri = `https://${sourceHostname}:6984`
-    const destinationUri = `https://${destinationHostname}:6984`
-    const connection = nano(
-      `https://${sourceUsername}:${sourcePassword}@${sourceHostname}:6984`
-    )
-    const replicator = connection.use('_replicator')
-    const sourceAuth = Buffer.from(
-      `${sourceUsername}:${sourcePassword}`
-    ).toString('base64')
-    const destinationAuth = Buffer.from(
-      `${destinationUsername}:${destinationPassword}`
-    ).toString('base64')
-    const obj = {
-      _id: `${sourceUri}${sourceDb}-${destinationUri}${destinationDb}-replication`,
-      source: {
-        url: `${sourceUri}${sourceDb}`,
-        headers: {
-          Authorization: `Basic ${sourceAuth}`
-        }
-      },
-      target: {
-        url: `${destinationUri}${destinationDb}`,
-        headers: {
-          Authorization: `Basic ${destinationAuth}`
-        }
-      },
+    const connection = nano(target.couchUri)
+    const replicatorDb = connection.use('_replicator')
+
+    const docId = `${source.hostname}${source.database}__to__${target.hostname}${target.database}`
+
+    const doc = await replicatorDb.get(encodeURIComponent(docId)).catch(err => {
+      console.log(err)
+      if (err.message === 'missing' || err.message === 'deleted') {
+        return { _id: docId }
+      }
+      throw err
+    })
+
+    const updatedDoc = {
+      ...doc,
+      source: sourceUrl,
+      target: targetUrl,
       create_target: true,
       continuous: true
     }
-    await replicator.insert(obj)
+
+    // If document isn't changed then exit
+    if (matchJson(doc, updatedDoc)) return
+
+    await replicatorDb.insert(updatedDoc)
   } catch (err) {
-    throw errorCause(new Error(`Replication failed to start`), err)
+    throw errorCause(
+      new Error(`Replication failed for ${target.hostname}`),
+      err
+    )
   }
 }
