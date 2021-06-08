@@ -23,7 +23,8 @@ export async function autoReplication(
   infoServerAddress: string,
   serverName: string,
   apiKey: string,
-  targetUrl: string
+  targetUrl: string,
+  databases: string[]
 ): Promise<void> {
   try {
     if (apiKey.length === 0) {
@@ -50,20 +51,6 @@ export async function autoReplication(
     for (const cluster of response.clusters) {
       for (const key in cluster.servers) {
         const { couchUrl: sourceUrl } = asServerInfo(cluster.servers[key])
-
-        const databases = await fetch(`${sourceUrl}/_all_dbs`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        })
-          .then(async res => await res.json())
-          .then(data => asArray(asString)(data))
-          .then(databases =>
-            databases.filter(
-              database => database !== '_users' && database !== '_replicator'
-            )
-          )
 
         for (const database of databases) {
           await dbReplication(
