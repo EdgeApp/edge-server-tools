@@ -1,7 +1,7 @@
 import nano from 'nano'
 import fetch from 'node-fetch'
 
-import { ServerUtilError } from '../util/server-util-error'
+import { errorCause } from '../util/error-cause'
 
 export async function autoReplication(
   infoServerAddress: string,
@@ -41,10 +41,10 @@ export async function autoReplication(
               const fullDestinationPath = `${destinationUrl}/${db}`
               await dbReplication(fullSourcePath, fullDestinationPath)
             }
-          } catch (e) {
-            throw new ServerUtilError(
-              `Replication failed at ${serverHostname}`,
-              e
+          } catch (err) {
+            throw errorCause(
+              new Error(`Replication failed at ${serverHostname}`),
+              err
             )
           }
         } else {
@@ -54,8 +54,8 @@ export async function autoReplication(
         }
       }
     }
-  } catch (e) {
-    throw new ServerUtilError(`Replication failed`, e)
+  } catch (err) {
+    throw errorCause(new Error(`Replication failed`), err)
   }
 }
 
@@ -104,7 +104,7 @@ export async function dbReplication(
       continuous: true
     }
     await replicator.insert(obj)
-  } catch (e) {
-    throw new ServerUtilError(`Replication failed to start`, e)
+  } catch (err) {
+    throw errorCause(new Error(`Replication failed to start`), err)
   }
 }
