@@ -1,10 +1,5 @@
 # Build output:
-/.cache/
-/cache/
-/dist/
 /lib/
-/config.json
-/twitterex.txt
 
 # Package managers:
 node_modules/
