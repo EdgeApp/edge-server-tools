@@ -1,0 +1,107 @@
+import { asArray, asMap, asObject, asString } from 'cleaners'
+import nano from 'nano'
+import fetch from 'node-fetch'
+
+import { dbUrlInfo } from '../util/db'
+import { errorCause } from '../util/error-cause'
+import { matchJson } from '../util/match-json'
+
+const asServerInfo = asObject({
+  couchUrl: asString
+})
+
+const asEdgeServersInternalResponse = asObject({
+  clusters: asArray(
+    asObject({
+      location: asString,
+      servers: asMap(asServerInfo)
+    })
+  )
+})
+
+export async function autoReplication(
+  infoServerAddress: string,
+  serverName: string,
+  apiKey: string,
+  targetUrl: string,
+  databases: string[]
+): Promise<void> {
+  try {
+    if (apiKey.length === 0) {
+      throw new Error('Missing info server api key')
+    }
+
+    const uri = `https://${infoServerAddress}/v1/edgeServersInternal/${serverName}s?apiKey=${apiKey}`
+    const response = await fetch(uri, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+      .then(async res => {
+        if (res.status !== 200) {
+          throw new Error(
+            `Failed fetch ${res.status} ${res.statusText} ${await res.text()}`
+          )
+        }
+        return await res.json()
+      })
+      .then(asEdgeServersInternalResponse)
+
+    for (const cluster of response.clusters) {
+      for (const key in cluster.servers) {
+        const { couchUrl: sourceUrl } = asServerInfo(cluster.servers[key])
+
+        for (const database of databases) {
+          await dbReplication(
+            `${sourceUrl}/${database}`,
+            `${targetUrl}/${database}`
+          )
+        }
+      }
+    }
+  } catch (err) {
+    throw errorCause(new Error(`Failed auto-replication`), err)
+  }
+}
+
+export async function dbReplication(
+  sourceUrl: string,
+  targetUrl: string
+): Promise<void> {
+  const source = dbUrlInfo(sourceUrl)
+  const target = dbUrlInfo(targetUrl)
+
+  try {
+    const connection = nano(target.couchUri)
+    const replicatorDb = connection.use('_replicator')
+
+    const docId = `${source.hostname}${source.database}__to__${target.hostname}${target.database}`
+
+    const doc = await replicatorDb.get(encodeURIComponent(docId)).catch(err => {
+      console.log(err)
+      if (err.message === 'missing' || err.message === 'deleted') {
+        return { _id: docId }
+      }
+      throw err
+    })
+
+    const updatedDoc = {
+      ...doc,
+      source: sourceUrl,
+      target: targetUrl,
+      create_target: true,
+      continuous: true
+    }
+
+    // If document isn't changed then exit
+    if (matchJson(doc, updatedDoc)) return
+
+    await replicatorDb.insert(updatedDoc)
+  } catch (err) {
+    throw errorCause(
+      new Error(`Replication failed for ${target.hostname}`),
+      err
+    )
+  }
+}
