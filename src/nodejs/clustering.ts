@@ -12,7 +12,9 @@ export function forkChildren(customNumCpus?: number): void {
   // Restart workers when they exit
   cluster.on('exit', (worker, code, signal) => {
     console.log(
-      `Worker ${worker.process.pid} died with code ${code} and signal ${signal}`
+      `Worker ${
+        worker.process.pid ?? '?'
+      } died with code ${code} and signal ${signal}`
     )
     console.log(`Forking new worker process...`)
     cluster.fork()

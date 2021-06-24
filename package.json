@@ -2,62 +2,71 @@
   "name": "edge-server-tools",
   "version": "0.1.0",
   "private": false,
-  "description": "Tools for common backend & couchdb related utility functions",
+  "description": "Common CouchDb & Express utility functions",
   "repository": "https://github.com/EdgeApp/edge-server-tools",
   "license": "MIT",
   "author": "Airbitz, Inc.",
-  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "import": "./lib/index.mjs",
+      "require": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./lib/index.js",
+  "module": "./lib/edge-server-tools.js",
+  "types": "./lib/src/index.d.ts",
   "files": [
-    "lib/*"
+    "CHANGELOG.md",
+    "lib/*",
+    "README.md"
   ],
   "scripts": {
-    "build.lib": "sucrase -q -t typescript,imports,jsx -d ./lib ./src",
-    "build.types": "tsc",
     "clean": "rimraf lib",
-    "fix": "yarn lint --fix",
+    "fix": "eslint . --fix",
+    "lib": "rollup -c",
     "lint": "eslint .",
-    "precommit": "lint-staged && yarn prepare",
-    "prepare": "npm-run-all clean -p build.*",
-    "start": "node -r sucrase/register src/index.ts"
-  },
-  "husky": {
-    "hooks": {
-      "pre-commit": "yarn precommit"
-    }
+    "precommit": "lint-staged && npm-run-all types test",
+    "prepare": "husky install && npm-run-all clean -p lib types",
+    "test": "mocha -r sucrase/register 'test/**/*.test.ts'",
+    "types": "tsc",
+    "verify": "npm-run-all lint types test"
   },
   "lint-staged": {
-    "*.{js,jsx,ts,tsx}": "eslint"
+    "*.{js,ts}": "eslint"
   },
   "dependencies": {
-    "@types/node": "^14.0.22",
-    "body-parser": "^1.19.0",
-    "cleaners": ">=0.2.1",
-    "commander": "^6.1.0",
-    "cors": "^2.8.5",
+    "cleaners": "^0.3.9",
     "nano": "^9.0.3",
-    "node-fetch": "^2.6.1",
-    "prop-types": ">= 15.5.10 < 16.0.0"
+    "node-fetch": "^2.6.1"
   },
   "devDependencies": {
-    "@babel/core": "^7.8.4",
+    "@babel/core": "^7.14.6",
+    "@babel/preset-typescript": "^7.14.5",
+    "@rollup/plugin-babel": "^5.3.0",
+    "@rollup/plugin-node-resolve": "^13.0.0",
+    "@types/chai": "^4.2.19",
+    "@types/mocha": "^8.2.2",
+    "@types/node": "^15.12.4",
     "@types/node-fetch": "^2.5.10",
-    "@typescript-eslint/eslint-plugin": "^4.26.0",
-    "@typescript-eslint/parser": "^4.26.0",
-    "eslint": "^7.22.0",
-    "eslint-config-standard-kit": "^0.15.1",
-    "eslint-plugin-import": "^2.23.4",
+    "@typescript-eslint/eslint-plugin": "^4.8.2",
+    "@typescript-eslint/parser": "^4.8.2",
+    "chai": "^4.3.4",
+    "eslint": "^7.14.0",
+    "eslint-config-standard-kit": "0.15.1",
+    "eslint-plugin-import": "^2.22.1",
     "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-prettier": "^3.4.0",
-    "eslint-plugin-promise": "^5.1.0",
-    "eslint-plugin-simple-import-sort": "^7.0.0",
-    "eslint-plugin-standard": "^5.0.0",
-    "husky": ">=3.0.0",
-    "lint-staged": ">=9.0.0",
+    "eslint-plugin-prettier": "^3.1.4",
+    "eslint-plugin-promise": "^4.2.1",
+    "eslint-plugin-simple-import-sort": "^6.0.1",
+    "husky": "^6.0.0",
+    "lint-staged": "^10.5.3",
+    "mocha": "^8.4.0",
     "npm-run-all": "^4.1.5",
-    "parcel": "^1.12.4",
-    "prettier": "^1.0.0",
-    "rimraf": "^3.0.2",
-    "sucrase": "^3.12.1",
-    "typescript": "^3.8.2"
+    "prettier": "^2.2.0",
+    "rollup": "^2.52.2",
+    "rollup-plugin-mjs-entry": "^0.1.1",
+    "sucrase": "^3.19.0",
+    "typescript": "^4.1.2"
   }
 }
