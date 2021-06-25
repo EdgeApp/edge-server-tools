@@ -1,3 +1,4 @@
+export * from './couchdb/bulk-get'
 export * from './couchdb/couch'
 export * from './couchdb/replication'
 export * from './couchdb/users'
