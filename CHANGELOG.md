@@ -1,5 +1,11 @@
 # edge-server-tools
 
+## 0.2.1 (2021-06-29)
+
+### Fixes
+
+- Create template documents with the correct contents.
+
 ## 0.2.0 (2021-06-25)
 
 ### Fixes
@@ -30,4 +36,5 @@
 ## 0.1.0 (2021-03-19)
 
 ### Changed
+
 - Initial publish
