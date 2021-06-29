@@ -55,7 +55,7 @@ export async function setupDatabase(
     const { _id = id, _rev } = await db.get(id).catch(() => ({}))
 
     if (_rev == null) {
-      await db.insert({ _id, ...documents[id] })
+      await db.insert({ _id, ...templates[id] })
       log(`Wrote document "${id}" in database "${name}".`)
     }
   }
