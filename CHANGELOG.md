@@ -1,5 +1,11 @@
 # edge-server-tools
 
+## 0.2.3 (2021-06-30)
+
+### Fixed
+
+- Improve compatibility with older Node.js versions without `??` support.
+
 ## 0.2.2 (2021-06-30)
 
 ### Added
