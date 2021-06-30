@@ -1,5 +1,11 @@
 # edge-server-tools
 
+## 0.2.2 (2021-06-30)
+
+### Added
+
+- Declare the CouchDb `emit` method as a global variable.
+
 ## 0.2.1 (2021-06-29)
 
 ### Fixes
