@@ -26,9 +26,14 @@ export function matchJson(a: any, b: any): boolean {
     return true
   }
 
-  // These are both regular objects, so grab the keys:
-  const aKeys = Object.getOwnPropertyNames(a)
-  const bKeys = Object.getOwnPropertyNames(b)
+  // These are both regular objects, so grab the keys,
+  // ignoring entries where the value is `undefined`:
+  const aKeys = Object.getOwnPropertyNames(a).filter(
+    key => a[key] !== undefined
+  )
+  const bKeys = Object.getOwnPropertyNames(b).filter(
+    key => b[key] !== undefined
+  )
   if (aKeys.length !== bKeys.length) return false
 
   // We know that both objects have the same number of properties,

@@ -27,4 +27,10 @@ describe('matchJson', function () {
     expect(matchJson({ a: 1, b: 2 }, { a: 1, b: 3 })).equals(false)
     expect(matchJson({ a: 1, b: 2 }, null)).equals(false)
   })
+
+  it('treats undefined and missing equally', function () {
+    expect(matchJson({ a: 1 }, { a: 1, c: undefined })).equals(true)
+    expect(matchJson({ a: 1, b: undefined }, { a: 1 })).equals(true)
+    expect(matchJson({ a: 1, c: 1 }, { a: 1, c: undefined })).equals(false)
+  })
 })
