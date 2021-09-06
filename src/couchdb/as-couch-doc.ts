@@ -1,11 +1,4 @@
-import {
-  asCodec,
-  asObject,
-  asOptional,
-  asString,
-  Cleaner,
-  uncleaner
-} from 'cleaners'
+import { asCodec, asOptional, asString, Cleaner, uncleaner } from 'cleaners'
 
 /**
  * A CouchDb document, transformed to remove the _id and _rev properties.
@@ -20,15 +13,22 @@ export function asCouchDoc<T>(cleaner: Cleaner<T>): Cleaner<CouchDoc<T>> {
   const wasCleaner = uncleaner(cleaner)
   return asCodec(
     raw => {
-      const clean = asCouchMetadata(raw)
-      return { doc: cleaner(raw), id: clean._id, rev: clean._rev }
+      if (typeof raw !== 'object' || raw == null) {
+        throw new TypeError('Expected an object')
+      }
+      const { _id, _rev, ...rest } = raw
+      return {
+        doc: cleaner(rest),
+        id: asString(_id),
+        rev: asRev(_rev)
+      }
     },
     clean => ({
+      ...(wasCleaner(clean.doc) as any),
       _id: clean.id,
-      _rev: clean.rev,
-      ...(wasCleaner(clean.doc) as any)
+      _rev: clean.rev
     })
   )
 }
 
-const asCouchMetadata = asObject({ _id: asString, _rev: asOptional(asString) })
+const asRev = asOptional(asString)

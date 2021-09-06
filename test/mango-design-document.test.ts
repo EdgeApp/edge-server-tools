@@ -33,7 +33,8 @@ const testCases: TestCase[] = [
           reduce: '_count',
           options: {
             def: {
-              fields: ['up', 'away']
+              fields: ['up', 'away'],
+              partial_filter_selector: undefined
             }
           }
         }

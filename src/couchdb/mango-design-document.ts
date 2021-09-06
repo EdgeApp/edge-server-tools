@@ -58,10 +58,12 @@ export function makeMangoIndex(
       partial_filter_selector: filter ?? {}
     },
     reduce: '_count',
-    options: { def: { fields } }
-  }
-  if (filter != null) {
-    view.options.def.partial_filter_selector = filter
+    options: {
+      def: {
+        fields,
+        partial_filter_selector: filter
+      }
+    }
   }
 
   // Return the design document:

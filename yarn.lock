@@ -1688,10 +1688,10 @@ mz@^2.7.0:
     object-assign "^4.0.1"
     thenify-all "^1.0.0"
 
-nano@^9.0.3:
-  version "9.0.3"
-  resolved "https://registry.yarnpkg.com/nano/-/nano-9.0.3.tgz#5f7e75962fbebf27f7791fb520a4f45c2bb425d2"
-  integrity sha512-NFI8+6q5ihnozH6qK+BJ+ilnPfZzBhlUswaFgqUvSp2EN5eJ2BMxbzkYiBsN+waa+N95FculCdbneDmzLWfXaQ==
+nano@^9.0.4:
+  version "9.0.4"
+  resolved "https://registry.yarnpkg.com/nano/-/nano-9.0.4.tgz#4c316d08b6501e940186c68b3d6731b2837f6157"
+  integrity sha512-hDf8r9iMiIgyXcIO/hWoTdawCTTFdjmcmGyAN+KaW86O8hVdZxr+Zid5vh51DYpsR8pE4AAu90Ts57Tjpwlqwg==
   dependencies:
     "@types/tough-cookie" "^4.0.0"
     axios "^0.21.1"
@@ -2640,6 +2640,11 @@ yargs@16.2.0:
     string-width "^4.2.0"
     y18n "^5.0.5"
     yargs-parser "^20.2.2"
+
+yavent@^0.1.3:
+  version "0.1.3"
+  resolved "https://registry.yarnpkg.com/yavent/-/yavent-0.1.3.tgz#c86a5e1d013721eda9c732e820fb7d6aaf2ab4db"
+  integrity sha512-O6ZngnMCkiM1Bg/zP2XKgprjXUuHS0tSQjHxWhMc53avgNu6AT5zcmDm+oYxQLRXQ9ajlEQwQ+Rf7CghKt1u1A==
 
 yocto-queue@^0.1.0:
   version "0.1.0"
