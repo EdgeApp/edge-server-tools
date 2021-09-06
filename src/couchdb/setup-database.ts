@@ -1,6 +1,8 @@
 import nano, { DatabaseCreateParams, DocumentScope } from 'nano'
 
 import { matchJson } from '../util/match-json'
+import { SyncedDocument } from './synced-document'
+import { watchDatabase } from './watch-database'
 
 /**
  * Describes a single Couch database that should exist.
@@ -12,12 +14,19 @@ export interface DatabaseSetup {
   // Documents that should exactly match:
   documents?: { [id: string]: object }
 
+  // Documents that we should keep up-to-date:
+  syncedDocuments?: Array<SyncedDocument<unknown>>
+
   // Documents that we should create, unless they already exist:
   templates?: { [id: string]: object }
 }
 
 export interface SetupDatabaseOptions {
   log?: (message: string) => void
+
+  // Set this to true to perform a one-time sync,
+  // so synced documents will not auto-update:
+  disableWatching?: boolean
 }
 
 /**
@@ -28,8 +37,18 @@ export async function setupDatabase(
   setupInfo: DatabaseSetup,
   opts: SetupDatabaseOptions = {}
 ): Promise<void> {
-  const { log = console.log } = opts
-  const { name, options, documents = {}, templates = {} } = setupInfo
+  const {
+    name,
+    options,
+    documents = {},
+    syncedDocuments = [],
+    templates = {}
+  } = setupInfo
+  const {
+    log = console.log,
+    // Don't watch the database unless there are synced documents:
+    disableWatching = syncedDocuments.length === 0
+  } = opts
   const connection = nano(couchUri)
 
   // Create missing databases:
@@ -58,5 +77,17 @@ export async function setupDatabase(
       await db.insert({ _id, ...templates[id] })
       log(`Wrote document "${id}" in database "${name}".`)
     }
+  }
+
+  // Update or watch synced documents:
+  if (disableWatching) {
+    await Promise.all(syncedDocuments.map(async doc => await doc.sync(db)))
+  } else {
+    await watchDatabase(db, {
+      syncedDocuments,
+      onError(error) {
+        log(`Error watching database ${name}: ${String(error)})`)
+      }
+    })
   }
 }
