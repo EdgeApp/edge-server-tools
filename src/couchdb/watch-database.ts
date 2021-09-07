@@ -9,17 +9,24 @@ export interface CouchChange {
   doc?: unknown
 }
 
+export interface WatchDatabaseOptions {
+  // Documents to automatically keep up-to-date:
+  syncedDocuments?: Array<SyncedDocument<unknown>>
+
+  // Provides low-level access to the change feed:
+  onChange?: (change: CouchChange) => void
+
+  // Called if there is an error in the watching loop:
+  onError?: (error: unknown) => void
+}
+
 /**
  * Subscribes to a database change feed,
  * and uses that to trigger updates on an array of document watchers.
  */
 export async function watchDatabase(
   db: DocumentScope<unknown>,
-  opts: {
-    onChange?: (change: CouchChange) => void
-    onError?: (error: unknown) => void
-    syncedDocuments?: Array<SyncedDocument<unknown>>
-  } = {}
+  opts: WatchDatabaseOptions = {}
 ): Promise<void> {
   const { onChange = () => {}, onError = () => {}, syncedDocuments = [] } = opts
 
@@ -37,7 +44,5 @@ export async function watchDatabase(
     .on('error', onError)
 
   // Do an initial sync:
-  for (const doc of syncedDocuments) {
-    await doc.sync(db).catch(onError)
-  }
+  await Promise.all(syncedDocuments.map(async doc => await doc.sync(db)))
 }
