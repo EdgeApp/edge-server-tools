@@ -1,5 +1,18 @@
 # edge-server-tools
 
+## 0.2.4 (2021-09-07)
+
+### Added
+
+- Add a `SyncedDocument` type, which keeps a document clean on the
+  database, and maintains a local in-memory copy as well.
+- Add a `watchDatabase` function, which subscribes to changes
+  in a CouchDB database.
+- Add a `CouchSetup.syncedDocuments` parameter to automatically
+  set up (and maybe watch) synced documents.
+- Add a `disableWatching` option to the `setupDatabase` function.
+- Add a `wait` option to the `PeriodicTask.start` method.
+
 ## 0.2.3 (2021-06-30)
 
 ### Fixed
