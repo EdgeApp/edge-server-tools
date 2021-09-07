@@ -1,9 +1,19 @@
+interface PeriodicTaskOptions {
+  // Handles any errors that the task throws or rejects with:
+  onError?: (error: unknown) => void
+}
+
+interface StartOptions {
+  // True to start in the waiting state, skipping the first run:
+  wait?: boolean
+}
+
 export interface PeriodicTask {
-  start: () => void
+  start: (opts?: StartOptions) => void
   stop: () => void
 
   // True once start is called, false after stop is called:
-  started: boolean
+  readonly started: boolean
 }
 
 /**
@@ -12,41 +22,38 @@ export interface PeriodicTask {
 export function makePeriodicTask(
   task: () => Promise<void> | void,
   msGap: number,
-  opts: {
-    onError?: (error: any) => void
-  } = {}
+  opts: PeriodicTaskOptions = {}
 ): PeriodicTask {
-  const {
-    onError = (e: any) => {
-      // do nothing
-    }
-  } = opts
+  const { onError = () => undefined } = opts
 
   // A started task will keep bouncing between running & waiting.
   // The `running` flag will be true in the running state,
   // and `timeout` will have a value in the waiting state.
   let running = false
-  let timeout: any
+  let timeout: ReturnType<typeof setTimeout> | undefined
 
-  function run(): void {
+  function startRunning(): void {
     timeout = undefined
     if (!out.started) return
     running = true
-    new Promise(resolve => resolve(task())).catch(onError).then(wait, wait)
+    new Promise(resolve => resolve(task()))
+      .catch(onError)
+      .then(startWaiting, startWaiting)
   }
 
-  function wait(): void {
+  function startWaiting(): void {
     running = false
     if (!out.started) return
-    timeout = setTimeout(run, msGap)
+    timeout = setTimeout(startRunning, msGap)
   }
 
   const out = {
     started: false,
 
-    start(): void {
+    start(opts: StartOptions = {}): void {
+      const { wait = false } = opts
       out.started = true
-      if (!running && timeout == null) run()
+      if (!running && timeout == null) wait ? startWaiting() : startRunning()
     },
 
     stop(): void {
