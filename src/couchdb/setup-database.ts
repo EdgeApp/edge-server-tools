@@ -34,7 +34,7 @@ export interface SetupDatabaseOptions {
  * Ensures that the requested database exists in Couch.
  */
 export async function setupDatabase(
-  couchUri: string,
+  connectionOrUri: nano.ServerScope | string,
   setupInfo: DatabaseSetup,
   opts: SetupDatabaseOptions = {}
 ): Promise<void> {
@@ -50,7 +50,10 @@ export async function setupDatabase(
     // Don't watch the database unless there are synced documents:
     disableWatching = syncedDocuments.length === 0
   } = opts
-  const connection = nano(couchUri)
+  const connection =
+    typeof connectionOrUri === 'string'
+      ? nano(connectionOrUri)
+      : connectionOrUri
 
   // Create missing databases:
   const existingDbs = await connection.db.list()
