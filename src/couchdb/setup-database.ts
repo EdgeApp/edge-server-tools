@@ -2,6 +2,8 @@ import { asMaybe, asObject, asValue } from 'cleaners'
 import nano, { DatabaseCreateParams, DocumentScope } from 'nano'
 
 import { matchJson } from '../util/match-json'
+import { ReplicatorDocument, ReplicatorEndpoint } from './replicator-document'
+import { ReplicatorSetupDocument } from './replicator-setup-document'
 import { SyncedDocument } from './synced-document'
 import { watchDatabase } from './watch-database'
 
@@ -15,6 +17,9 @@ export interface DatabaseSetup {
   // Documents that should exactly match:
   documents?: { [id: string]: object }
 
+  // Servers to use for replication:
+  replicatorSetup?: SyncedDocument<ReplicatorSetupDocument>
+
   // Documents that we should keep up-to-date:
   syncedDocuments?: Array<SyncedDocument<unknown>>
 
@@ -24,6 +29,11 @@ export interface DatabaseSetup {
 
 export interface SetupDatabaseOptions {
   log?: (message: string) => void
+
+  // The cluster name for the current machine.
+  // This must name be present in the replication setup document,
+  // or we won't be able to set up replication.
+  currentCluster?: string
 
   // Set this to true to perform a one-time sync,
   // so synced documents will not auto-update:
@@ -42,11 +52,13 @@ export async function setupDatabase(
     name,
     options,
     documents = {},
+    replicatorSetup,
     syncedDocuments = [],
     templates = {}
   } = setupInfo
   const {
     log = console.log,
+    currentCluster,
     // Don't watch the database unless there are synced documents:
     disableWatching = syncedDocuments.length === 0
   } = opts
@@ -61,7 +73,7 @@ export async function setupDatabase(
     await connection.db.create(name, options)
     log(`Created database "${name}"`)
   }
-  const db: DocumentScope<any> = connection.db.use(name)
+  const db: DocumentScope<unknown> = connection.db.use(name)
 
   // Update documents:
   for (const id of Object.keys(documents)) {
@@ -99,6 +111,65 @@ export async function setupDatabase(
         log(`Error watching database ${name}: ${String(error)})`)
       }
     })
+  }
+
+  // Set up replication:
+  if (replicatorSetup != null && currentCluster != null) {
+    // Figure out the current username:
+    const sessionInfo = await connection.session()
+    const currentUsername: string = sessionInfo.userCtx.name
+
+    // Helper to create replication documents on demand:
+    const setupReplicator = async (): Promise<void> => {
+      const { clusters } = replicatorSetup.doc
+
+      // Bail out if the current cluster is missing from the list:
+      if (clusters[currentCluster] == null) return
+
+      function makeEndpoint(clusterName: string): ReplicatorEndpoint {
+        const row = clusters[clusterName]
+        const url = `${row.url.replace(/[/]$/, '')}/${name}`
+        return row.basicAuth == null
+          ? url
+          : { url, headers: { Authorization: `Basic ${row.basicAuth}` } }
+      }
+
+      const documents: { [name: string]: ReplicatorDocument } = {}
+      for (const remoteCluster of Object.keys(clusters)) {
+        if (remoteCluster === currentCluster) continue
+        const { mode } = clusters[remoteCluster]
+
+        if (mode === 'source' || mode === 'both') {
+          documents[`${name}.from.${remoteCluster}`] = {
+            continuous: true,
+            create_target: false,
+            owner: currentUsername,
+            source: makeEndpoint(remoteCluster),
+            target: makeEndpoint(currentCluster)
+          }
+        }
+
+        if (mode === 'target' || mode === 'both') {
+          documents[`${name}.to-${remoteCluster}`] = {
+            continuous: true,
+            create_target: true,
+            create_target_params: options,
+            owner: currentUsername,
+            source: makeEndpoint(currentCluster),
+            target: makeEndpoint(remoteCluster)
+          }
+        }
+      }
+      await setupDatabase(connection, { name: '_replicator', documents }, opts)
+    }
+
+    // Subscribe to changes in the replicator setup document:
+    replicatorSetup.onChange(() => {
+      setupReplicator().catch(error => {
+        log(`Error updating replication for ${name}: ${String(error)})`)
+      })
+    })
+    await setupReplicator()
   }
 }
 

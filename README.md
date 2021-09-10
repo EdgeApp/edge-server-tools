@@ -76,6 +76,7 @@ This method takes a database description, and then ensures that Couch contains a
 const logDbSetup = {
   name: 'logs',
   options: { partitioned: true },
+  replicatorSetup: [replicators],
 
   syncedDocuments: [settings],
   documents: {
@@ -89,7 +90,9 @@ const logDbSetup = {
   }
 }
 
-await setupDatabase(couchConnection, logDbSetup)
+await setupDatabase(couchConnection, logDbSetup, {
+  currentCluster: 'east-usa'
+})
 ```
 
 The setup object has many options:
@@ -99,6 +102,7 @@ The setup object has many options:
 - `documents` will be uploaded to the database, unless a document with matching contents exists.
 - `templates` will be uploaded to the database, unless a document with the same name exists.
 - `syncedDocuments` will be kept in sync by subscribing to the changes feed.
+- `replicatorSetup` is a list of machines to replicate the database with, in the form of a `syncedDocument<ReplicatorSetupDocument>`. For this to work, `setupDatabase` needs to receive a `currentCluster` string argument that maps to a valid cluster name in the replicator list.
 
 ### syncedDocument
 
