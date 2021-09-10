@@ -1,3 +1,4 @@
+import { asMaybe, asObject, asValue } from 'cleaners'
 import nano, { DatabaseCreateParams, DocumentScope } from 'nano'
 
 import { matchJson } from '../util/match-json'
@@ -61,7 +62,10 @@ export async function setupDatabase(
 
   // Update documents:
   for (const id of Object.keys(documents)) {
-    const { _id = id, _rev, ...rest } = await db.get(id).catch(() => ({}))
+    const { _id, _rev, ...rest } = await db.get(id).catch(error => {
+      if (asMaybeNotFound(error) == null) throw error
+      return { _id: id, _rev: undefined }
+    })
 
     if (!matchJson(documents[id], rest)) {
       await db.insert({ _id, _rev, ...documents[id] })
@@ -71,7 +75,10 @@ export async function setupDatabase(
 
   // Create template documents:
   for (const id of Object.keys(templates)) {
-    const { _id = id, _rev } = await db.get(id).catch(() => ({}))
+    const { _id, _rev } = await db.get(id).catch(error => {
+      if (asMaybeNotFound(error) == null) throw error
+      return { _id: id, _rev: undefined }
+    })
 
     if (_rev == null) {
       await db.insert({ _id, ...templates[id] })
@@ -91,3 +98,9 @@ export async function setupDatabase(
     })
   }
 }
+
+const asMaybeNotFound = asMaybe(
+  asObject({
+    error: asValue('not_found')
+  })
+)
