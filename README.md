@@ -28,11 +28,13 @@ To reverse this, just use the un-cleaner version:
 ```js
 const wasCouchLogItem = uncleaner(asCouchLogItem)
 
-await db.insert(wasCouchLogItem({
-  id,
-  rev, // Optional
-  doc: { where, when }
-}))
+await db.insert(
+  wasCouchLogItem({
+    id,
+    rev, // Optional
+    doc: { where, when }
+  })
+)
 ```
 
 ### forEachDocument
@@ -74,6 +76,8 @@ This method takes a database description, and then ensures that Couch contains a
 const logDbSetup = {
   name: 'logs',
   options: { partitioned: true },
+
+  syncedDocuments: [settings],
   documents: {
     '_design/location': makeIndexDocument('location', ['where'])
   },
@@ -85,7 +89,36 @@ const logDbSetup = {
   }
 }
 
-await setupDatabase(logDbSetup)
+await setupDatabase(couchConnection, logDbSetup)
 ```
 
-This method will update `documents` included in the setup object, so they exactly match. It will upload `templates` only if the database doesn't already contain a document with this name.
+The setup object has many options:
+
+- `name` is the name of the database to create or update.
+- `options` are Couch database creation options.
+- `documents` will be uploaded to the database, unless a document with matching contents exists.
+- `templates` will be uploaded to the database, unless a document with the same name exists.
+- `syncedDocuments` will be kept in sync by subscribing to the changes feed.
+
+### syncedDocument
+
+This function creates a Couch document babysitter, which ensures that the document exists and is clean.
+
+This function accepts a cleaner, which it uses to validate the document. The cleaner should be able to turn the empty object (`{}`) into a valid fallback value, such as by using `asMaybe`. This will be used to repair broken or missing documents.
+
+The `syncedDocument` return value has a copy of the document contents, as well as methods for syncing with the database and subscribing to changes.
+
+```js
+const settings = syncedDocument('settings', asSettings)
+
+// Do an initial sync:
+await settings.sync()
+
+// These are now initialized:
+console.log(settings.doc, settings.id, settings.rev)
+
+// Watch for changes (still requires `sync` to fetch changes):
+settings.onChange((doc) => console.log('update', doc))
+```
+
+Passing a synced document to `setupDatabase` will subscribe to live changes, so the document will stay up-to-date automatically. Otherwise, just call `sync` periodically to poll for changes.
