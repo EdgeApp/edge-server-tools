@@ -36,7 +36,7 @@
     "*.{js,ts}": "eslint"
   },
   "dependencies": {
-    "cleaners": "^0.3.9",
+    "cleaners": "^0.3.11",
     "nano": "^9.0.4",
     "node-fetch": "^2.6.1",
     "yavent": "^0.1.3"
