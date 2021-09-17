@@ -1,5 +1,12 @@
 # edge-server-tools
 
+## 0.2.5 (2021-09-17)
+
+- added: Documentation for the `syncedDocument` function
+- added: Give the `databaseSetup` helper replication setup options.
+- changed: Loosen the `errorCause` types to allow `unknown` causes.
+- deprecated: The `autoReplication` functionality has been replaced by `databaseSetup`, and will be removed in the next breaking release.
+
 ## 0.2.4 (2021-09-07)
 
 - added: A `SyncedDocument` type, which keeps a document clean on the database, and maintains a local in-memory copy as well.
