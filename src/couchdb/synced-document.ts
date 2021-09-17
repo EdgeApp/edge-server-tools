@@ -3,7 +3,6 @@ import { DocumentScope } from 'nano'
 import { makeEvent, OnEvent } from 'yavent'
 
 import { matchJson } from '../util/match-json'
-import { asCouchDoc } from './as-couch-doc'
 
 /**
  * Babysits a Couch document, ensuring it exists and is clean.
@@ -41,7 +40,7 @@ export function syncedDocument<T>(
   cleaner: Cleaner<T>
 ): SyncedDocument<T> {
   const fallback = cleaner({})
-  const asDocument = asCouchDoc(asMaybe(cleaner, fallback))
+  const asDocument = asMaybe(cleaner, fallback)
   const wasDocument = uncleaner(asDocument)
   const [on, emit] = makeEvent<T>()
 
@@ -52,21 +51,21 @@ export function syncedDocument<T>(
     onChange: on,
 
     sync: withMutex(async (db: DocumentScope<unknown>): Promise<void> => {
-      const raw = await db.get(id).catch(async error => {
+      const { _id, _rev, ...rest } = await db.get(id).catch(error => {
         if (asMaybeNotFound(error) == null) throw error
-        return { _id: id }
+        return { _id: id, _rev: undefined }
       })
-      const clean = asDocument(raw)
+      const clean = asDocument(rest)
       const dirty = wasDocument(clean)
-      if (!matchJson(dirty, raw)) {
-        const result = await db.insert(dirty)
+      if (_rev == null || !matchJson(dirty, rest)) {
+        const result = await db.insert({ _id, _rev, ...dirty })
         out.rev = result.rev
-        out.doc = clean.doc
-        emit(clean.doc)
-      } else if (out.rev !== clean.rev) {
-        out.rev = clean.rev
-        out.doc = clean.doc
-        emit(clean.doc)
+        out.doc = clean
+        emit(clean)
+      } else if (out.rev !== _rev) {
+        out.rev = _rev
+        out.doc = clean
+        emit(clean)
       }
     })
   }
