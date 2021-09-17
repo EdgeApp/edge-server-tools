@@ -2,7 +2,6 @@ import { asArray, asMap, asObject, asString } from 'cleaners'
 import nano from 'nano'
 import fetch from 'node-fetch'
 
-import { dbUrlInfo } from '../util/db'
 import { errorCause } from '../util/error-cause'
 import { matchJson } from '../util/match-json'
 
@@ -103,5 +102,36 @@ export async function dbReplication(
       new Error(`Replication failed for ${target.hostname}`),
       err
     )
+  }
+}
+
+interface CouchConnectionInfo {
+  couchUri: string
+  hostname: string
+  username: string
+  password: string
+  database: string
+  auth: string
+}
+
+function dbUrlInfo(url: string): CouchConnectionInfo {
+  const {
+    hostname,
+    username,
+    password,
+    pathname: database,
+    protocol,
+    port
+  } = new URL(url)
+  const couchUri = `${protocol}//${username}:${password}@${hostname}:${port}`
+  const auth = Buffer.from(`${username}:${password}`).toString('base64')
+
+  return {
+    couchUri,
+    username,
+    password,
+    hostname,
+    database,
+    auth
   }
 }
