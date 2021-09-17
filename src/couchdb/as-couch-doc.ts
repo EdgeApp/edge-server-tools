@@ -24,7 +24,7 @@ export function asCouchDoc<T>(cleaner: Cleaner<T>): Cleaner<CouchDoc<T>> {
       }
     },
     clean => ({
-      ...(wasCleaner(clean.doc) as any),
+      ...wasCleaner(clean.doc),
       _id: clean.id,
       _rev: clean.rev
     })

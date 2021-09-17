@@ -59,7 +59,7 @@ export function syncedDocument<T>(
       const clean = asDocument(raw)
       const dirty = wasDocument(clean)
       if (!matchJson(dirty, raw)) {
-        const result = await db.insert(dirty as any)
+        const result = await db.insert(dirty)
         out.rev = result.rev
         out.doc = clean.doc
         emit(clean.doc)
