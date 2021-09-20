@@ -150,7 +150,7 @@ export async function setupDatabase(
         }
 
         if (mode === 'target' || mode === 'both') {
-          documents[`${name}.to-${remoteCluster}`] = {
+          documents[`${name}.to.${remoteCluster}`] = {
             continuous: true,
             create_target: true,
             create_target_params: options,
