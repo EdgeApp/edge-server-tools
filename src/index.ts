@@ -1,3 +1,4 @@
+export * from './cleaners/as-healing-object'
 export * from './couchdb/as-couch-doc'
 export * from './couchdb/bulk-get'
 export * from './couchdb/for-each-document'
