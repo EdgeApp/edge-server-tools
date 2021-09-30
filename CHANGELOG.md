@@ -1,5 +1,9 @@
 # edge-server-tools
 
+## 0.2.6 (2021-09-30)
+
+- fixed: Fix the auto-generated replication document names to use periods.
+
 ## 0.2.5 (2021-09-17)
 
 - added: Documentation for the `syncedDocument` function
