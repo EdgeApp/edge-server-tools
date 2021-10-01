@@ -68,9 +68,13 @@ export async function setupDatabase(
       : connectionOrUri
 
   // Create missing databases:
-  const existingDbs = await connection.db.list()
-  if (!existingDbs.includes(name)) {
-    await connection.db.create(name, options)
+  const existingInfo = await connection.db.get(name).catch(error => {
+    if (asMaybeNotFound(error) == null) throw error
+  })
+  if (existingInfo == null) {
+    await connection.db.create(name, options).catch(error => {
+      if (asMaybeFileExists(error) == null) throw error
+    })
     log(`Created database "${name}"`)
   }
   const db: DocumentScope<unknown> = connection.db.use(name)
@@ -175,6 +179,12 @@ export async function setupDatabase(
     await setupReplicator()
   }
 }
+
+const asMaybeFileExists = asMaybe(
+  asObject({
+    error: asValue('file_exists')
+  })
+)
 
 const asMaybeNotFound = asMaybe(
   asObject({
