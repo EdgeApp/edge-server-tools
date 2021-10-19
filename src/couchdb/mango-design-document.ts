@@ -38,7 +38,7 @@ export function makeMangoIndex(
     partitioned?: boolean
   } = {}
 ): MangoDesignDocument {
-  const { filter, partitioned = false } = opts
+  const { filter, partitioned } = opts
 
   // Normalize the fields list:
   const fieldNames: SortItem = {}
@@ -71,6 +71,6 @@ export function makeMangoIndex(
     language: 'query',
     views: { [name]: view }
   }
-  if (partitioned) out.options = { partitioned: true }
+  if (partitioned != null) out.options = { partitioned }
   return out
 }
