@@ -137,7 +137,10 @@ export async function setupDatabase(
       const documents: { [name: string]: ReplicatorDocument } = {}
       for (const remoteCluster of Object.keys(clusters)) {
         if (remoteCluster === currentCluster) continue
-        const { mode } = clusters[remoteCluster]
+        const { exclude, include, mode } = clusters[remoteCluster]
+
+        if (exclude != null && includesName(exclude, name)) continue
+        if (include != null && !includesName(include, name)) continue
 
         if (mode === 'source' || mode === 'both') {
           documents[`${name}.from.${remoteCluster}`] = {
@@ -178,3 +181,15 @@ const asMaybeNotFound = asMaybe(
     error: asValue('not_found')
   })
 )
+
+/**
+ * Returns true if a list includes a name.
+ * If a list row ends with '*', treat that like a wildcard.
+ */
+function includesName(list: string[], name: string): boolean {
+  const found = list.find(
+    row =>
+      row === (/\*$/.test(row) ? name.slice(0, row.length - 1) + '*' : name)
+  )
+  return found != null
+}
