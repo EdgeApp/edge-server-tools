@@ -1,4 +1,12 @@
-import { asMaybe, asObject, asString, asValue, Cleaner } from 'cleaners'
+import {
+  asArray,
+  asMaybe,
+  asObject,
+  asOptional,
+  asString,
+  asValue,
+  Cleaner
+} from 'cleaners'
 
 import { asHealingObject } from '../cleaners/as-healing-object'
 
@@ -15,6 +23,12 @@ export interface ReplicatorSetupDocument {
       // The base64 "username:password" pair used to authenticate.
       // To get this, run `btoa('username:password')` in a JS console:
       basicAuth?: string
+
+      // Database names to replicate with this cluster.
+      // Leave the list missing to skip filtering, and use an ending '*'
+      // to treat an entry as a prefix instead of an exact name.
+      exclude?: string[]
+      include?: string[]
 
       // How the replications should take place.
       // If a replicator is a "source", its peers will pull changes from it.
@@ -34,6 +48,8 @@ export const asReplicatorSetupDocument: Cleaner<ReplicatorSetupDocument> =
       asObject({
         url: asMaybe(asString, ''),
         basicAuth: asMaybe(asString),
+        exclude: asMaybe(asOptional(asArray(asString))),
+        include: asMaybe(asOptional(asArray(asString))),
         mode: asMaybe(asValue('source', 'target', 'both'), 'source')
       })
     )
