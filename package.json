@@ -1,6 +1,6 @@
 {
   "name": "edge-server-tools",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "private": false,
   "description": "Common CouchDb & Express utility functions",
   "repository": "https://github.com/EdgeApp/edge-server-tools",

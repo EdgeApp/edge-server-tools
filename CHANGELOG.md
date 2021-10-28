@@ -1,5 +1,12 @@
 # edge-server-tools
 
+## 0.2.7 (2021-10-28)
+
+- fixed: Create Mango views with the `partitioned` flag as-passed.
+- fixed: Make database creation more reliable.
+- added: Add a `makeJsDesign` helper function.
+- added: Add `include` and `exclude` filters to the replication setup document.
+
 ## 0.2.6 (2021-09-30)
 
 - fixed: Fix the auto-generated replication document names to use periods.
