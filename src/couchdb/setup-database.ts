@@ -5,12 +5,13 @@ import { matchJson } from '../util/match-json'
 import { ReplicatorDocument, ReplicatorEndpoint } from './replicator-document'
 import { ReplicatorSetupDocument } from './replicator-setup-document'
 import { SyncedDocument } from './synced-document'
-import { watchDatabase } from './watch-database'
+import { watchDatabase, WatchDatabaseOptions } from './watch-database'
 
 /**
  * Describes a single Couch database that should exist.
  */
-export interface DatabaseSetup {
+export interface DatabaseSetup
+  extends Pick<WatchDatabaseOptions, 'onChange' | 'syncedDocuments'> {
   name: string
   options?: DatabaseCreateParams
 
@@ -20,24 +21,22 @@ export interface DatabaseSetup {
   // Servers to use for replication:
   replicatorSetup?: SyncedDocument<ReplicatorSetupDocument>
 
-  // Documents that we should keep up-to-date:
-  syncedDocuments?: Array<SyncedDocument<unknown>>
-
   // Documents that we should create, unless they already exist:
   templates?: { [id: string]: object }
 }
 
 export interface SetupDatabaseOptions {
-  log?: (message: string) => void
-
-  // The cluster name for the current machine.
-  // This must name be present in the replication setup document,
-  // or we won't be able to set up replication.
+  // The couch cluster name the current client is connected to,
+  // to enable replicating to or from this instance.
   currentCluster?: string
 
-  // Set this to true to perform a one-time sync,
-  // so synced documents will not auto-update:
+  // The setup routine will subscribe to the changes feed if
+  // the setup includes an `onChange` callback or synced documents.
+  // This option disables watching, performing a one-time sync instead.
   disableWatching?: boolean
+
+  // Logs status messages whenever we write things to Couch:
+  log?: (message: string) => void
 }
 
 /**
@@ -54,16 +53,12 @@ export async function setupDatabase(
     name,
     options,
     documents = {},
+    onChange,
     replicatorSetup,
     syncedDocuments = [],
     templates = {}
   } = setupInfo
-  const {
-    log = console.log,
-    currentCluster,
-    // Don't watch the database unless there are synced documents:
-    disableWatching = syncedDocuments.length === 0
-  } = opts
+  const { currentCluster, disableWatching = false, log = console.log } = opts
   const connection =
     typeof connectionOrUri === 'string'
       ? nano(connectionOrUri)
@@ -108,17 +103,19 @@ export async function setupDatabase(
   }
 
   // Update or watch synced documents:
-  if (disableWatching) {
-    await Promise.all(syncedDocuments.map(async doc => await doc.sync(db)))
-  } else {
+  const canWatch = onChange != null || syncedDocuments.length > 0
+  if (canWatch && !disableWatching) {
     cleanups.push(
       await watchDatabase(db, {
+        onChange,
         syncedDocuments,
         onError(error) {
           log(`Error watching database ${name}: ${String(error)})`)
         }
       })
     )
+  } else {
+    await Promise.all(syncedDocuments.map(async doc => await doc.sync(db)))
   }
 
   // Set up replication:
