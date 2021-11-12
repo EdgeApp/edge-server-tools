@@ -42,12 +42,14 @@ export interface SetupDatabaseOptions {
 
 /**
  * Ensures that the requested database exists in Couch.
+ * Returns a cleanup function, which removes any background tasks.
  */
 export async function setupDatabase(
   connectionOrUri: nano.ServerScope | string,
   setupInfo: DatabaseSetup,
   opts: SetupDatabaseOptions = {}
-): Promise<void> {
+): Promise<() => void> {
+  const cleanups: Array<() => void> = []
   const {
     name,
     options,
@@ -109,12 +111,14 @@ export async function setupDatabase(
   if (disableWatching) {
     await Promise.all(syncedDocuments.map(async doc => await doc.sync(db)))
   } else {
-    await watchDatabase(db, {
-      syncedDocuments,
-      onError(error) {
-        log(`Error watching database ${name}: ${String(error)})`)
-      }
-    })
+    cleanups.push(
+      await watchDatabase(db, {
+        syncedDocuments,
+        onError(error) {
+          log(`Error watching database ${name}: ${String(error)})`)
+        }
+      })
+    )
   }
 
   // Set up replication:
@@ -171,13 +175,17 @@ export async function setupDatabase(
     }
 
     // Subscribe to changes in the replicator setup document:
-    replicatorSetup.onChange(() => {
-      setupReplicator().catch(error => {
-        log(`Error updating replication for ${name}: ${String(error)})`)
+    cleanups.push(
+      replicatorSetup.onChange(() => {
+        setupReplicator().catch(error => {
+          log(`Error updating replication for ${name}: ${String(error)})`)
+        })
       })
-    })
+    )
     await setupReplicator()
   }
+
+  return () => cleanups.forEach(cleanup => cleanup())
 }
 
 const asMaybeFileExists = asMaybe(
