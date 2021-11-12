@@ -37,6 +37,9 @@ export interface SetupDatabaseOptions {
 
   // Logs status messages whenever we write things to Couch:
   log?: (message: string) => void
+
+  // Logs error messages whenever something goes wrong:
+  onError?: (error: unknown) => void
 }
 
 /**
@@ -58,7 +61,14 @@ export async function setupDatabase(
     syncedDocuments = [],
     templates = {}
   } = setupInfo
-  const { currentCluster, disableWatching = false, log = console.log } = opts
+  const {
+    currentCluster,
+    disableWatching = false,
+    log = console.log,
+    onError = error => {
+      log(`Error while maintaining database "${name}": ${String(error)})`)
+    }
+  } = opts
   const connection =
     typeof connectionOrUri === 'string'
       ? nano(connectionOrUri)
@@ -106,13 +116,7 @@ export async function setupDatabase(
   const canWatch = onChange != null || syncedDocuments.length > 0
   if (canWatch && !disableWatching) {
     cleanups.push(
-      await watchDatabase(db, {
-        onChange,
-        syncedDocuments,
-        onError(error) {
-          log(`Error watching database ${name}: ${String(error)})`)
-        }
-      })
+      await watchDatabase(db, { onChange, onError, syncedDocuments })
     )
   } else {
     await Promise.all(syncedDocuments.map(async doc => await doc.sync(db)))
@@ -174,9 +178,7 @@ export async function setupDatabase(
     // Subscribe to changes in the replicator setup document:
     cleanups.push(
       replicatorSetup.onChange(() => {
-        setupReplicator().catch(error => {
-          log(`Error updating replication for ${name}: ${String(error)})`)
-        })
+        setupReplicator().catch(onError)
       })
     )
     await setupReplicator()
