@@ -27,7 +27,7 @@ export interface WatchDatabaseOptions {
 export async function watchDatabase(
   db: DocumentScope<unknown>,
   opts: WatchDatabaseOptions = {}
-): Promise<void> {
+): Promise<() => void> {
   const { onChange = () => {}, onError = () => {}, syncedDocuments = [] } = opts
 
   // Watch the database for changes:
@@ -45,4 +45,6 @@ export async function watchDatabase(
 
   // Do an initial sync:
   await Promise.all(syncedDocuments.map(async doc => await doc.sync(db)))
+
+  return () => db.changesReader.stop()
 }
