@@ -1,5 +1,12 @@
 # edge-server-tools
 
+## 0.2.8 (2021-11-15)
+
+- added: Return cleanup routines from `setupDatabase` & `watchDatabase`.
+- added: Add a `DatabaseSetup.onChange` callback.
+- added: Add a `SetupDatabaseOptions.onError` callback.
+- fixed: Make `SetupDatabaseOptions.disableWatching` work as expected.
+
 ## 0.2.7 (2021-10-28)
 
 - fixed: Create Mango views with the `partitioned` flag as-passed.
