@@ -354,7 +354,11 @@ export function makeRollingDatabase<T>(
       cleanups = []
       for (const { archived, name } of list) {
         const setup: DatabaseSetup = { name, ...setupRest }
-        if (!archived) setup.replicatorSetup = replicatorSetup
+        if (archived) {
+          setup.ignoreMissing = true
+        } else {
+          setup.replicatorSetup = replicatorSetup
+        }
         cleanups.push(await setupDatabase(connection, setup, opts))
       }
 
