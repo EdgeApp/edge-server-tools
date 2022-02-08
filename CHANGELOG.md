@@ -1,5 +1,9 @@
 # edge-server-tools
 
+## 0.2.9 (2022-02-07)
+
+- added: Add a `makeRollingDatabase` function to manage collections of time-based databases.
+
 ## 0.2.8 (2021-11-15)
 
 - added: Return cleanup routines from `setupDatabase` & `watchDatabase`.
