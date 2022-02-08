@@ -12,7 +12,13 @@ import { watchDatabase, WatchDatabaseOptions } from './watch-database'
  */
 export interface DatabaseSetup
   extends Pick<WatchDatabaseOptions, 'onChange' | 'syncedDocuments'> {
+  // Do not create the database if it is missing:
+  ignoreMissing?: boolean
+
+  // The database name:
   name: string
+
+  // Options to pass to CouchDB when creating this database:
   options?: DatabaseCreateParams
 
   // Documents that should exactly match:
@@ -53,10 +59,11 @@ export async function setupDatabase(
 ): Promise<() => void> {
   const cleanups: Array<() => void> = []
   const {
-    name,
-    options,
     documents = {},
+    ignoreMissing = false,
+    name,
     onChange,
+    options,
     replicatorSetup,
     syncedDocuments = [],
     templates = {}
@@ -79,6 +86,7 @@ export async function setupDatabase(
     if (asMaybeNotFound(error) == null) throw error
   })
   if (existingInfo == null) {
+    if (ignoreMissing) return () => {}
     await connection.db.create(name, options).catch(error => {
       if (asMaybeFileExists(error) == null) throw error
     })

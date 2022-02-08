@@ -3,6 +3,7 @@ import { DocumentScope } from 'nano'
 import { makeEvent, OnEvent } from 'yavent'
 
 import { matchJson } from '../util/match-json'
+import { withMutex } from '../util/with-mutex'
 
 /**
  * Babysits a Couch document, ensuring it exists and is clean.
@@ -70,20 +71,6 @@ export function syncedDocument<T>(
     })
   }
   return out
-}
-
-/**
- * Causes the passed function to never run in parallel.
- */
-function withMutex<A extends unknown[], R>(
-  f: (...args: A) => Promise<R>
-): (...args: A) => Promise<R> {
-  let running: Promise<R> | undefined
-  return async (...args: A): Promise<R> => {
-    if (running == null) running = f(...args)
-    else running = running.then(async () => await f(...args))
-    return await running
-  }
 }
 
 const asMaybeNotFound = asMaybe(
