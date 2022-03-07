@@ -88,12 +88,24 @@ export interface RollingDatabase<T> {
     params: RollingViewParams
   ) => Promise<Array<CouchDoc<T>>>
 
+  listAsStream: (
+    connection: ServerScope,
+    params: RollingViewParams
+  ) => AsyncIterableIterator<CouchDoc<T>>
+
   view: (
     connection: ServerScope,
     design: string,
     view: string,
     params: RollingViewParams
   ) => Promise<Array<CouchDoc<T>>>
+
+  viewAsStream: (
+    connection: ServerScope,
+    design: string,
+    view: string,
+    params: RollingViewParams
+  ) => AsyncIterableIterator<CouchDoc<T>>
 
   insert: (
     connection: ServerScope,
@@ -177,9 +189,13 @@ export function makeRollingDatabase<T>(
     for (const database of databases) {
       if (database.archived && !useArchived) continue
       const db = connection.use(database.name)
+
       const response = await callback(db, out.length).catch(error => {
-        if (database.startDate.valueOf() < Date.now()) throw error
-        return []
+        // Ignore errors in future or archived databases:
+        if (Date.now() < database.startDate.valueOf() || database.archived) {
+          return []
+        }
+        throw error
       })
       out = out.concat(response)
 
@@ -188,11 +204,63 @@ export function makeRollingDatabase<T>(
         (limit != null && out.length >= limit) ||
         (afterDate != null &&
           database.startDate.valueOf() <= afterDate.valueOf())
-      )
+      ) {
         break
+      }
     }
 
     return out
+  }
+
+  async function* streamingQuery(
+    connection: ServerScope,
+    callback: (
+      db: nano.DocumentScope<unknown>,
+      params: DocumentViewParams
+    ) => Promise<Array<{ id: string; key: string; doc?: unknown }>>,
+    opts: { afterDate?: Date; useArchived?: boolean } = {}
+  ): AsyncIterableIterator<CouchDoc<T>> {
+    const { afterDate, useArchived = false, ...rest } = opts
+
+    for (const database of databases) {
+      if (database.archived && !useArchived) continue
+      const db = connection.use(database.name)
+
+      const limit = 2048
+      let lastRow: { id: string; key: string } | undefined
+      while (true) {
+        const params: DocumentViewParams = {
+          ...rest,
+          include_docs: true,
+          limit
+        }
+        if (lastRow != null) {
+          params.skip = 1
+          params.start_key = lastRow.key
+          params.start_key_doc_id = lastRow.id
+        }
+        const rows = await callback(db, params).catch(error => {
+          // Ignore errors in future or archived databases:
+          if (Date.now() < database.startDate.valueOf() || database.archived) {
+            return []
+          }
+          throw error
+        })
+        for (const row of rows) yield asDoc(row.doc)
+
+        // Set up the next iteration:
+        if (rows.length < limit) break
+        lastRow = rows[rows.length - 1]
+      }
+
+      // Stop once we have enough results:
+      if (
+        afterDate != null &&
+        database.startDate.valueOf() <= afterDate.valueOf()
+      ) {
+        break
+      }
+    }
   }
 
   async function find(
@@ -234,6 +302,25 @@ export function makeRollingDatabase<T>(
     )
   }
 
+  function listAsStream(
+    connection: ServerScope,
+    opts: RollingViewParams
+  ): AsyncIterableIterator<CouchDoc<T>> {
+    const { afterDate, partition, useArchived = false, ...rest } = opts
+
+    return streamingQuery(
+      connection,
+      async (db, params) => {
+        const allParams = { ...rest, ...params }
+        const { rows } = await (partition == null
+          ? db.list(allParams)
+          : db.partitionedList(partition, allParams))
+        return rows
+      },
+      { afterDate, useArchived }
+    )
+  }
+
   async function view(
     connection: ServerScope,
     design: string,
@@ -253,6 +340,27 @@ export function makeRollingDatabase<T>(
         return response.rows.map(row => asDoc(row.doc))
       },
       { afterDate, limit }
+    )
+  }
+
+  function viewAsStream(
+    connection: ServerScope,
+    design: string,
+    view: string,
+    opts: RollingViewParams
+  ): AsyncIterableIterator<CouchDoc<T>> {
+    const { afterDate, partition, useArchived = false, ...rest } = opts
+
+    return streamingQuery(
+      connection,
+      async (db, params) => {
+        const allParams = { ...rest, ...params }
+        const { rows } = await (partition == null
+          ? db.view(design, view, allParams)
+          : db.partitionedView(partition, design, view, allParams))
+        return rows
+      },
+      { afterDate, useArchived }
     )
   }
 
@@ -385,7 +493,7 @@ export function makeRollingDatabase<T>(
     }
   }
 
-  return { bulk, find, list, view, insert, setup }
+  return { bulk, find, list, listAsStream, view, viewAsStream, insert, setup }
 }
 
 const asListEntry = asCouchDoc(
