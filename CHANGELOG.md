@@ -1,5 +1,9 @@
 # edge-server-tools
 
+## 0.2.10 (2022-03-09)
+
+- added: Add `RollingDatabase.listAsStream` and `RollingDatabase.viewAsStream` methods.
+
 ## 0.2.9 (2022-02-07)
 
 - added: Add a `makeRollingDatabase` function to manage collections of time-based databases.
