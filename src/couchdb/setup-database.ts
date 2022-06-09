@@ -141,7 +141,20 @@ export async function setupDatabase(
       const { clusters } = replicatorSetup.doc
 
       // Bail out if the current cluster is missing from the list:
-      if (clusters[currentCluster] == null) return
+      const current = clusters[currentCluster]
+      if (current == null) return
+
+      // Who do we replicate with?
+      const {
+        pullFrom = Object.keys(clusters).filter(name => {
+          const { mode } = clusters[name]
+          return mode === 'both' || mode === 'source'
+        }),
+        pushTo = Object.keys(clusters).filter(name => {
+          const { mode } = clusters[name]
+          return mode === 'both' || mode === 'target'
+        })
+      } = current
 
       function makeEndpoint(clusterName: string): ReplicatorEndpoint {
         const row = clusters[clusterName]
@@ -154,12 +167,12 @@ export async function setupDatabase(
       const documents: { [name: string]: ReplicatorDocument } = {}
       for (const remoteCluster of Object.keys(clusters)) {
         if (remoteCluster === currentCluster) continue
-        const { exclude, include, mode } = clusters[remoteCluster]
+        const { exclude = [], include = ['*'] } = clusters[remoteCluster]
 
-        if (exclude != null && includesName(exclude, name)) continue
-        if (include != null && !includesName(include, name)) continue
+        if (includesName(exclude, name)) continue
+        if (!includesName(include, name)) continue
 
-        if (mode === 'source' || mode === 'both') {
+        if (includesName(pullFrom, name)) {
           documents[`${name}.from.${remoteCluster}`] = {
             continuous: true,
             create_target: false,
@@ -169,7 +182,7 @@ export async function setupDatabase(
           }
         }
 
-        if (mode === 'target' || mode === 'both') {
+        if (includesName(pushTo, name)) {
           documents[`${name}.to.${remoteCluster}`] = {
             continuous: true,
             create_target: true,

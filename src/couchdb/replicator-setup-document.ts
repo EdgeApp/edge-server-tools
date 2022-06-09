@@ -17,10 +17,18 @@ interface ClusterRow {
   exclude?: string[]
   include?: string[]
 
-  // How the replications should take place.
-  // If a replicator is a "source", its peers will pull changes from it.
-  // If a replicator is a "target", its peers will push their changes to it.
-  mode: 'source' | 'target' | 'both'
+  // Cluster names to replicate with.
+  // Use an ending '*' for wildcard matching.
+  // The `pullFrom` list defaults to all peers in "source" mode.
+  // The `pushTo` list defaults to all peers in "target" mode.
+  //
+  // The `mode` flag is deprecated,
+  // so it is better to fill these in manually.
+  pullFrom?: string[]
+  pushTo?: string[]
+
+  // Deprecated. See `pushTo` and `pullFrom`.
+  mode?: 'both' | 'source' | 'target'
 }
 
 /**
@@ -39,11 +47,14 @@ const asClusterRow = asHealingObject<ClusterRow>(
     basicAuth: asString,
     exclude: asOptional(asArray(asString)),
     include: asOptional(asArray(asString)),
-    mode: asValue('source', 'target', 'both')
+    pullFrom: asOptional(asArray(asString)),
+    pushTo: asOptional(asArray(asString)),
+    mode: asOptional(asValue('both', 'source', 'target'))
   },
   {
     url: '',
-    mode: 'source'
+    pullFrom: [],
+    pushTo: []
   }
 )
 
