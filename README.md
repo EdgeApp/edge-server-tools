@@ -2,156 +2,33 @@
 
 The [Edge Wallet](https://edge.app) uses a variety of back-end micro-services, including encrypted key backup, exchange rates, mining fees, and so forth. Most of these services use an Express frontend talking touch a CouchDB database, so this library contains common utility functions for working with these technologies.
 
-## Couch Utilities
+Cleaners:
 
-### asCouchDoc
+- [`asCouchDoc`](./docs/as-couch-doc.md) - A cleaner for dealing with the `_id` and `_rev` fields CouchDB adds to documents.
+- [`asHealingObject`](./docs/as-healing-object.md) - A cleaner for repairing damaged objects using default values.
 
-This cleaner function validates the `_id` and `_rev` properties on a database document, and them removes them from the payload data. The clean payload is available as a `doc` property on the returned object:
+CouchDB utilities:
 
-```js
-// The "pure" payload, without Couch stuff:
-const asLogItem = asObject({
-  where: asString,
-  when: asDate
-})
+- [`forEachDocument`](./docs/for-each-document.md) - Iterates over the documents in a Couch database.
+- `makeRollingDatabase` - Treats a collection of databases as a single large database, organized by date range.
+- `bulkGet` - Nano forgot to implement this method for some reason.
 
-// The payload with Couch fields:
-const asCouchLogItem = asCouchDoc(asLogItem)
+CouchDB setup tools:
 
-// Cleaning a Couch document returns this,
-// where the `doc` has `_id` and `_rev` removed:
-const { id, rev, doc } = asCouchLogItem(raw)
-```
+- [`setupDatabase`](./docs/couch-setup.md) - Automatically creates a database, sets up replication and design documents, and subscribes to the changes feed.
+- [`makeJsDesign`](./docs/couch-setup.md#makeJsDesign) - Creates a JavaScript design document.
+- [`makeMangoIndex`](./docs/couch-setup.md#makeMangoIndex) - Creates a Mango index design document.
+- [`syncedDocument`](./docs/couch-setup.md#watching-settings-documents) - Watches a settings document for changes.
 
-To reverse this, just use the un-cleaner version:
+Other stuff:
 
-```js
-const wasCouchLogItem = uncleaner(asCouchLogItem)
+- `forkChildren` - Used for Node.js clustering.
+- `errorCause` - Adds an `error.cause` property.
+- `matchJson` - Returns `true` if two JSON-style objects match.
+- `makePeriodicTask` - Starts a periodic async task, with error handling and other features.
 
-await db.insert(
-  wasCouchLogItem({
-    id,
-    rev, // Optional
-    doc: { where, when }
-  })
-)
-```
+Deprecated stuff:
 
-### forEachDocument
-
-This method iterates over the documents in a database, calling a callback for each one. It accepts an optional Mango selector.
-
-```js
-declare async function forEachDocument(
-  db: DocumentScope<any>,
-  callback: (document: unknown) => void | Promise<void>,
-  opts?: {
-    selector?: MangoSelector
-  }
-): Promise<void>
-```
-
-### makeIndexDocument
-
-This method creates a design document describing a Mango index.
-
-```js
-declare export function makeIndexDocument(
-  name: string,
-  fields: SortSyntax,
-  opts?: {
-    filter?: MangoSelector,
-    partitioned?: boolean
-  }
-): MangoDesignDocument
-```
-
-This is useful with `setupDatabase`.
-
-### setupDatabase
-
-This method takes a database description, and then ensures that Couch contains a matching database. This is especially useful for ensuring that the correct views and indexes exist before starting the server application.
-
-```js
-const logDbSetup = {
-  name: 'logs',
-  options: { partitioned: true },
-  replicatorSetup: [replicators],
-
-  syncedDocuments: [settings],
-  documents: {
-    '_design/location': makeIndexDocument('location', ['where'])
-  },
-  templates: {
-    'example-document': {
-      where: 'here',
-      when: new Date()
-    }
-  }
-}
-
-await setupDatabase(couchConnection, logDbSetup, {
-  currentCluster: 'east-usa'
-})
-```
-
-The setup object has many options:
-
-- `name` is the name of the database to create or update.
-- `options` are Couch database creation options.
-- `documents` will be uploaded to the database, unless a document with matching contents exists.
-- `templates` will be uploaded to the database, unless a document with the same name exists.
-- `syncedDocuments` will be kept in sync by subscribing to the changes feed.
-- `replicatorSetup` is a list of machines to replicate the database with, in the form of a `syncedDocument<ReplicatorSetupDocument>`. For this to work, `setupDatabase` needs to receive a `currentCluster` string argument that maps to a valid cluster name in the replicator list.
-
-### syncedDocument
-
-This function creates a Couch document babysitter, which ensures that the document exists and is clean.
-
-This function accepts a cleaner, which it uses to validate the document. The cleaner should be able to turn the empty object (`{}`) into a valid fallback value, such as by using `asMaybe`. This will be used to repair broken or missing documents.
-
-The `syncedDocument` return value has a copy of the document contents, as well as methods for syncing with the database and subscribing to changes.
-
-```js
-const settings = syncedDocument('settings', asSettings)
-
-// Do an initial sync:
-await settings.sync()
-
-// These are now initialized:
-console.log(settings.doc, settings.id, settings.rev)
-
-// Watch for changes (still requires `sync` to fetch changes):
-settings.onChange((doc) => console.log('update', doc))
-```
-
-Passing a synced document to `setupDatabase` will subscribe to live changes, so the document will stay up-to-date automatically. Otherwise, just call `sync` periodically to poll for changes.
-
-## Cleaners
-
-We use the [cleaners](https://cleaners.js.org) extensively for data validation, so this library includes a few helpful ones.
-
-### asHealingObject
-
-This is like the built-in [`asObject` cleaner](https://cleaners.js.org/#/reference?id=asobject), but it replaces or removes broken properties instead of throwing an exception. When cleaning an object with a specific shape, this requires a fallback object:
-
-```js
-const asMessage = asHealingObject(
-  {
-    to: asString,
-    body: asString
-  },
-  { to: '', body: '' }
-)
-
-asHealingObject({ body: 'hi' }) // returns { to: '', body: 'hi' }
-```
-
-When cleaning a key-value object, this will simply remove invalid entries:
-
-```js
-const asSizes = asHealingObject(asNumber)
-
-// returns { small: 1, big: 10 }:
-asSizes({ small: 1, big: 10, huge: '11' })
-```
+- `autoReplication` - Deprecated. Use the new `setupDatabase` stuff.
+- `createAdminUser`
+- `createRegularUser`
