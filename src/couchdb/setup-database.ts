@@ -24,17 +24,20 @@ export interface DatabaseSetup
   // Documents that should exactly match:
   documents?: { [id: string]: object }
 
-  // Servers to use for replication:
-  replicatorSetup?: SyncedDocument<ReplicatorSetupDocument>
-
   // Documents that we should create, unless they already exist:
   templates?: { [id: string]: object }
+
+  // Deprecated. Put this in the options instead:
+  replicatorSetup?: SyncedDocument<ReplicatorSetupDocument>
 }
 
 export interface SetupDatabaseOptions {
   // The couch cluster name the current client is connected to,
   // to enable replicating to or from this instance.
   currentCluster?: string
+
+  // Servers to use for replication:
+  replicatorSetup?: SyncedDocument<ReplicatorSetupDocument>
 
   // The setup routine will subscribe to the changes feed if
   // the setup includes an `onChange` callback or synced documents.
@@ -64,12 +67,12 @@ export async function setupDatabase(
     name,
     onChange,
     options,
-    replicatorSetup,
     syncedDocuments = [],
     templates = {}
   } = setupInfo
   const {
     currentCluster,
+    replicatorSetup = setupInfo.replicatorSetup,
     disableWatching = false,
     log = console.log,
     onError = error => {
