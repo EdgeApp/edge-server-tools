@@ -1,5 +1,13 @@
 # edge-server-tools
 
+## 0.2.11 (2022-06-13)
+
+- added: Accept `pushTo` and `pullFrom` fields in the replicator setup document.
+- changed: Accept `replicatorSetup` as a `setupDatabase` config option.
+- changed: Reorganize the documentation, including a more tutorial-like section about database setup.
+- deprecated: Replicator setup documents should remove `mode` and use `pushTo` or `pullFrom` instead.
+- deprecated: `DatabaseSetup.replicatorSetup`. Pass this in the options parameter instead.
+
 ## 0.2.10 (2022-03-09)
 
 - added: Add `RollingDatabase.listAsStream` and `RollingDatabase.viewAsStream` methods.
