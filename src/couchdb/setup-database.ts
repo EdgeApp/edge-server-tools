@@ -175,7 +175,7 @@ export async function setupDatabase(
         if (includesName(exclude, name)) continue
         if (!includesName(include, name)) continue
 
-        if (includesName(pullFrom, name)) {
+        if (includesName(pullFrom, remoteCluster)) {
           documents[`${name}.from.${remoteCluster}`] = {
             continuous: true,
             create_target: false,
@@ -185,7 +185,7 @@ export async function setupDatabase(
           }
         }
 
-        if (includesName(pushTo, name)) {
+        if (includesName(pushTo, remoteCluster)) {
           documents[`${name}.to.${remoteCluster}`] = {
             continuous: true,
             create_target: true,
@@ -196,7 +196,11 @@ export async function setupDatabase(
           }
         }
       }
-      await setupDatabase(connection, { name: '_replicator', documents }, opts)
+      await setupDatabase(
+        connection,
+        { name: '_replicator', documents },
+        { ...opts, replicatorSetup: undefined }
+      )
     }
 
     // Subscribe to changes in the replicator setup document:
