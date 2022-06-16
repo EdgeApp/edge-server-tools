@@ -142,15 +142,8 @@ type RollingDatabaseList = Array<{
 export function makeRollingDatabase<T>(
   setupInfo: RollingDatabaseSetup<T>
 ): RollingDatabase<T> {
-  const {
-    name,
-    archiveStart,
-    cleaner,
-    getDate,
-    period,
-    replicatorSetup,
-    ...setupRest
-  } = setupInfo
+  const { name, archiveStart, cleaner, getDate, period, ...setupRest } =
+    setupInfo
   const asDoc = asCouchDoc(cleaner)
   const wasDoc = uncleaner(asDoc)
 
@@ -397,7 +390,6 @@ export function makeRollingDatabase<T>(
     // Ensure we have a list database:
     const listDbSetup: DatabaseSetup = {
       name: `${name}-list`,
-      replicatorSetup,
       onChange() {
         readDbList().catch(onError)
       }
@@ -464,8 +456,6 @@ export function makeRollingDatabase<T>(
         const setup: DatabaseSetup = { name, ...setupRest }
         if (archived) {
           setup.ignoreMissing = true
-        } else {
-          setup.replicatorSetup = replicatorSetup
         }
         cleanups.push(await setupDatabase(connection, setup, opts))
       }
