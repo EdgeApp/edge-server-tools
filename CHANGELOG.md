@@ -1,5 +1,9 @@
 # edge-server-tools
 
+## 0.2.12 (2022-06-21)
+
+- fixed: Do not auto-replicate databases that are set to `ignoreMissing`, such as archived rolling databases.
+
 ## 0.2.11 (2022-06-13)
 
 - added: Accept `pushTo` and `pullFrom` fields in the replicator setup document.
