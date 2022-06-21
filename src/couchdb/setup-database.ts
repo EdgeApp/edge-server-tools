@@ -12,9 +12,6 @@ import { watchDatabase, WatchDatabaseOptions } from './watch-database'
  */
 export interface DatabaseSetup
   extends Pick<WatchDatabaseOptions, 'onChange' | 'syncedDocuments'> {
-  // Do not create the database if it is missing:
-  ignoreMissing?: boolean
-
   // The database name:
   name: string
 
@@ -26,6 +23,11 @@ export interface DatabaseSetup
 
   // Documents that we should create, unless they already exist:
   templates?: { [id: string]: object }
+
+  // Do not create the database if it is missing.
+  // This also disables replication,
+  // since the database might be missing on the remote side:
+  ignoreMissing?: boolean
 
   // Deprecated. Put this in the options instead:
   replicatorSetup?: SyncedDocument<ReplicatorSetupDocument>
@@ -133,8 +135,8 @@ export async function setupDatabase(
     await Promise.all(syncedDocuments.map(async doc => await doc.sync(db)))
   }
 
-  // Set up replication:
-  if (replicatorSetup != null && currentCluster != null) {
+  // Set up replication.
+  if (replicatorSetup != null && currentCluster != null && !ignoreMissing) {
     // Figure out the current username:
     const sessionInfo = await connection.session()
     const currentUsername: string = sessionInfo.userCtx.name
