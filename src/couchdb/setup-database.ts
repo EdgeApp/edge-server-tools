@@ -151,6 +151,8 @@ export async function setupDatabase(
 
       // Who do we replicate with?
       const {
+        exclude: localExclude = [],
+        include: localInclude = ['*'],
         pullFrom = Object.keys(clusters).filter(name => {
           const { mode } = clusters[name]
           return mode === 'both' || mode === 'source'
@@ -172,10 +174,13 @@ export async function setupDatabase(
       const documents: { [name: string]: ReplicatorDocument } = {}
       for (const remoteCluster of Object.keys(clusters)) {
         if (remoteCluster === currentCluster) continue
-        const { exclude = [], include = ['*'] } = clusters[remoteCluster]
+        const { exclude: remoteExclude = [], include: remoteInclude = ['*'] } =
+          clusters[remoteCluster]
 
-        if (includesName(exclude, name)) continue
-        if (!includesName(include, name)) continue
+        if (!includesName(localInclude, name)) continue
+        if (!includesName(remoteInclude, name)) continue
+        if (includesName(localExclude, name)) continue
+        if (includesName(remoteExclude, name)) continue
 
         if (includesName(pullFrom, remoteCluster)) {
           documents[`${name}.from.${remoteCluster}`] = {
