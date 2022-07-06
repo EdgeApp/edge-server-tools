@@ -9,9 +9,9 @@ Cleaners:
 
 CouchDB utilities:
 
-- [`forEachDocument`](./docs/for-each-document.md) - Iterates over the documents in a Couch database.
-- `makeRollingDatabase` - Treats a collection of databases as a single large database, organized by date range.
 - `bulkGet` - Nano forgot to implement this method for some reason.
+- `makeRollingDatabase` - Treats a collection of databases as a single large database, organized by date range.
+- [`viewToStream`](./docs/view-to-stream.md) - Iterates over the documents in a database, partition, or view.
 
 CouchDB setup tools:
 
@@ -32,3 +32,4 @@ Deprecated stuff:
 - `autoReplication` - Deprecated. Use the new `setupDatabase` stuff.
 - `createAdminUser`
 - `createRegularUser`
+- [`forEachDocument`](./docs/for-each-document.md) - Iterates over the documents in a Couch database. Use `viewToStream` instead.
