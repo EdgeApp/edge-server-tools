@@ -1,5 +1,10 @@
 # edge-server-tools
 
+## 0.2.13 (2022-07-07)
+
+- added: Add a `viewToStream` utility function.
+- deprecated: Deprecate the `forEachDocument` utility. Use `viewToStream` instead.
+
 ## 0.2.12 (2022-06-21)
 
 - fixed: Do not auto-replicate databases that are set to `ignoreMissing`, such as archived rolling databases.
