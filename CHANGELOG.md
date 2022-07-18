@@ -1,5 +1,9 @@
 # edge-server-tools
 
+## 0.2.14 (2022-07-18)
+
+- changed: Merge the `include` and `exclude` lists from the source and destination replication targets. Before, we only considered the destination.
+
 ## 0.2.13 (2022-07-07)
 
 - added: Add a `viewToStream` utility function.
