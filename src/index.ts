@@ -1,5 +1,6 @@
 export * from './couchdb/as-couch-doc'
 export * from './couchdb/bulk-get'
+export * from './couchdb/couch-error-cleaners'
 export * from './couchdb/for-each-document'
 export * from './couchdb/js-design-document'
 export * from './couchdb/mango-design-document'

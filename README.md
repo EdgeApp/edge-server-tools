@@ -6,6 +6,9 @@ Cleaners:
 
 - [`asCouchDoc`](./docs/as-couch-doc.md) - A cleaner for dealing with the `_id` and `_rev` fields CouchDB adds to documents.
 - [`asHealingObject`](./docs/as-healing-object.md) - A cleaner for repairing damaged objects using default values.
+- [`asMaybeConflictError`] - Passes for a CouchDB conflict error.
+- [`asMaybeExistsError`] - Passes for a CouchDB item exists error.
+- [`asMaybeNotFoundError`] - Passes for a CouchDB item missing error.
 
 CouchDB utilities:
 
