@@ -1,7 +1,10 @@
-import { asMaybe, asObject, asValue } from 'cleaners'
 import nano, { DatabaseCreateParams, DocumentScope } from 'nano'
 
 import { matchJson } from '../util/match-json'
+import {
+  asMaybeExistsError,
+  asMaybeNotFoundError
+} from './couch-error-cleaners'
 import { ReplicatorDocument, ReplicatorEndpoint } from './replicator-document'
 import { ReplicatorSetupDocument } from './replicator-setup-document'
 import { SyncedDocument } from './synced-document'
@@ -88,12 +91,12 @@ export async function setupDatabase(
 
   // Create missing databases:
   const existingInfo = await connection.db.get(name).catch(error => {
-    if (asMaybeNotFound(error) == null) throw error
+    if (asMaybeNotFoundError(error) == null) throw error
   })
   if (existingInfo == null) {
     if (ignoreMissing) return () => {}
     await connection.db.create(name, options).catch(error => {
-      if (asMaybeFileExists(error) == null) throw error
+      if (asMaybeExistsError(error) == null) throw error
     })
     log(`Created database "${name}"`)
   }
@@ -102,7 +105,7 @@ export async function setupDatabase(
   // Update documents:
   for (const id of Object.keys(documents)) {
     const { _id, _rev, ...rest } = await db.get(id).catch(error => {
-      if (asMaybeNotFound(error) == null) throw error
+      if (asMaybeNotFoundError(error) == null) throw error
       return { _id: id, _rev: undefined }
     })
 
@@ -115,7 +118,7 @@ export async function setupDatabase(
   // Create template documents:
   for (const id of Object.keys(templates)) {
     const { _id, _rev } = await db.get(id).catch(error => {
-      if (asMaybeNotFound(error) == null) throw error
+      if (asMaybeNotFoundError(error) == null) throw error
       return { _id: id, _rev: undefined }
     })
 
@@ -221,18 +224,6 @@ export async function setupDatabase(
 
   return () => cleanups.forEach(cleanup => cleanup())
 }
-
-const asMaybeFileExists = asMaybe(
-  asObject({
-    error: asValue('file_exists')
-  })
-)
-
-const asMaybeNotFound = asMaybe(
-  asObject({
-    error: asValue('not_found')
-  })
-)
 
 /**
  * Returns true if a list includes a name.

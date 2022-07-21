@@ -1,9 +1,10 @@
-import { asMaybe, asObject, asValue, Cleaner, uncleaner } from 'cleaners'
+import { asMaybe, Cleaner, uncleaner } from 'cleaners'
 import { DocumentScope } from 'nano'
 import { makeEvent, OnEvent } from 'yavent'
 
 import { matchJson } from '../util/match-json'
 import { withMutex } from '../util/with-mutex'
+import { asMaybeNotFoundError } from './couch-error-cleaners'
 
 /**
  * Babysits a Couch document, ensuring it exists and is clean.
@@ -53,7 +54,7 @@ export function syncedDocument<T>(
 
     sync: withMutex(async (db: DocumentScope<unknown>): Promise<void> => {
       const { _id, _rev, ...rest } = await db.get(id).catch(error => {
-        if (asMaybeNotFound(error) == null) throw error
+        if (asMaybeNotFoundError(error) == null) throw error
         return { _id: id, _rev: undefined }
       })
       const clean = asDocument(rest)
@@ -72,9 +73,3 @@ export function syncedDocument<T>(
   }
   return out
 }
-
-const asMaybeNotFound = asMaybe(
-  asObject({
-    error: asValue('not_found')
-  })
-)
