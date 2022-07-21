@@ -1,5 +1,10 @@
 # edge-server-tools
 
+## 0.2.15 (2022-07-21)
+
+- added: Add a `AggregateError` ponyfill and related utilities.
+- added: Expose our Couch error cleaners for outside consumption.
+
 ## 0.2.14 (2022-07-18)
 
 - changed: Merge the `include` and `exclude` lists from the source and destination replication targets. Before, we only considered the destination.
