@@ -20,6 +20,12 @@ CouchDB setup tools:
 - [`makeMangoIndex`](./docs/couch-setup.md#makeMangoIndex) - Creates a Mango index design document.
 - [`syncedDocument`](./docs/couch-setup.md#watching-settings-documents) - Watches a settings document for changes.
 
+AggregateError tools:
+
+- [`AggregateError`] - A ponyfill for the new ES2021 AggregateError type.
+- [`promiseAny`] - A ponyfill for the new ES2021 `Promise.any` method.
+- [`stringifyError`] - Turns an error into a string, with special handling for `AggregateError`.
+
 Other stuff:
 
 - `forkChildren` - Used for Node.js clustering.
