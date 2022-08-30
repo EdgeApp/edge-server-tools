@@ -72,6 +72,14 @@ export interface RollingViewParams extends DocumentViewParams {
   useArchived?: boolean
 }
 
+/**
+ * Arguments to the rolling database reduce query.
+ */
+export interface RollingReduceParams<R> extends RollingViewParams {
+  // Cleans the view output:
+  cleaner: Cleaner<R>
+}
+
 export interface RollingDatabase<T> {
   bulk: (
     connection: ServerScope,
@@ -92,6 +100,18 @@ export interface RollingDatabase<T> {
     connection: ServerScope,
     params: RollingViewParams
   ) => AsyncIterableIterator<CouchDoc<T>>
+
+  /**
+   * Uses a view to reduce data.
+   * Returns one reduced result per rolling database where the query matches.
+   * The caller needs to re-reduce these down to a single value, if desired.
+   */
+  reduce: <R>(
+    connection: ServerScope,
+    design: string,
+    view: string,
+    params: RollingReduceParams<R>
+  ) => Promise<R[]>
 
   view: (
     connection: ServerScope,
@@ -168,17 +188,14 @@ export function makeRollingDatabase<T>(
     return out
   }
 
-  async function rollingQuery(
+  async function rollingQuery<R = CouchDoc<T>>(
     connection: ServerScope,
-    callback: (
-      db: nano.DocumentScope<unknown>,
-      count: number
-    ) => Promise<Array<CouchDoc<T>>>,
+    callback: (db: nano.DocumentScope<unknown>, count: number) => Promise<R[]>,
     opts: { afterDate?: Date; limit?: number; useArchived?: boolean } = {}
-  ): Promise<Array<CouchDoc<T>>> {
+  ): Promise<R[]> {
     const { afterDate, limit, useArchived = false } = opts
 
-    let out: Array<CouchDoc<T>> = []
+    let out: R[] = []
     for (const database of databases) {
       if (database.archived && !useArchived) continue
       const db = connection.use(database.name)
@@ -333,6 +350,37 @@ export function makeRollingDatabase<T>(
     )
   }
 
+  async function reduce<R>(
+    connection: ServerScope,
+    design: string,
+    view: string,
+    params: RollingReduceParams<R>
+  ): Promise<R[]> {
+    const {
+      afterDate,
+      cleaner,
+      partition,
+      useArchived,
+      // Native CouchDB options:
+      ...rest
+    } = params
+
+    const values = await rollingQuery<R>(
+      connection,
+      async db => {
+        const params: DocumentViewParams = { ...rest, reduce: true }
+        const response = await (partition == null
+          ? db.view(design, view, params)
+          : db.partitionedView(partition, design, view, params))
+        const [row] = response.rows
+        return row == null ? [] : [cleaner(row.value)]
+      },
+      { afterDate, useArchived }
+    )
+
+    return values
+  }
+
   async function view(
     connection: ServerScope,
     design: string,
@@ -351,7 +399,11 @@ export function makeRollingDatabase<T>(
     return await rollingQuery(
       connection,
       async (db, count) => {
-        const params: DocumentViewParams = { ...rest, include_docs: true }
+        const params: DocumentViewParams = {
+          ...rest,
+          include_docs: true,
+          reduce: false
+        }
         if (limit != null) params.limit = limit - count
         const response = await (partition == null
           ? db.view(design, view, params)
@@ -379,7 +431,7 @@ export function makeRollingDatabase<T>(
     return streamingQuery(
       connection,
       async (db, params) => {
-        const allParams = { ...rest, ...params }
+        const allParams = { ...rest, ...params, reduce: false }
         const { rows } = await (partition == null
           ? db.view(design, view, allParams)
           : db.partitionedView(partition, design, view, allParams))
@@ -515,7 +567,17 @@ export function makeRollingDatabase<T>(
     }
   }
 
-  return { bulk, find, list, listAsStream, view, viewAsStream, insert, setup }
+  return {
+    bulk,
+    find,
+    list,
+    listAsStream,
+    reduce,
+    view,
+    viewAsStream,
+    insert,
+    setup
+  }
 }
 
 const asListEntry = asCouchDoc(
