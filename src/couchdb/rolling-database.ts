@@ -211,21 +211,20 @@ export function makeRollingDatabase<T>(
       db: nano.DocumentScope<unknown>,
       params: DocumentViewParams
     ) => Promise<Array<{ id: string; key: string; doc?: unknown }>>,
-    opts: { afterDate?: Date; useArchived?: boolean } = {}
+    opts: { afterDate?: Date; chunkSize?: number; useArchived?: boolean } = {}
   ): AsyncIterableIterator<CouchDoc<T>> {
-    const { afterDate, useArchived = false, ...rest } = opts
+    const { afterDate, chunkSize = 2048, useArchived = false, ...rest } = opts
 
     for (const database of databases) {
       if (database.archived && !useArchived) continue
       const db = connection.use(database.name)
 
-      const limit = 2048
       let lastRow: { id: string; key: string } | undefined
       while (true) {
         const params: DocumentViewParams = {
           ...rest,
           include_docs: true,
-          limit
+          limit: chunkSize
         }
         if (lastRow != null) {
           params.skip = 1
@@ -242,7 +241,7 @@ export function makeRollingDatabase<T>(
         for (const row of rows) yield asDoc(row.doc)
 
         // Set up the next iteration:
-        if (rows.length < limit) break
+        if (rows.length < chunkSize) break
         lastRow = rows[rows.length - 1]
       }
 
@@ -260,18 +259,25 @@ export function makeRollingDatabase<T>(
     connection: ServerScope,
     opts: RollingMangoQuery
   ): Promise<Array<CouchDoc<T>>> {
-    const { afterDate, limit = 20, partition, selector, sort } = opts
+    const {
+      afterDate,
+      partition,
+      useArchived,
+      // Native CouchDB options:
+      limit = 20,
+      ...rest
+    } = opts
 
     return await rollingQuery(
       connection,
       async (db, count) => {
-        const query = { limit: limit - count, selector, sort }
+        const query = { limit: limit - count, ...rest }
         const response = await (partition == null
           ? db.find(query)
           : db.partitionedFind(partition, query))
         return response.docs.map(doc => asDoc(doc))
       },
-      { afterDate, limit }
+      { afterDate, limit, useArchived }
     )
   }
 
@@ -279,7 +285,14 @@ export function makeRollingDatabase<T>(
     connection: ServerScope,
     opts: RollingViewParams
   ): Promise<Array<CouchDoc<T>>> {
-    const { afterDate, limit, partition, ...rest } = opts
+    const {
+      afterDate,
+      partition,
+      useArchived,
+      // Native CouchDB options:
+      limit,
+      ...rest
+    } = opts
 
     return await rollingQuery(
       connection,
@@ -291,7 +304,7 @@ export function makeRollingDatabase<T>(
           : db.partitionedList(partition, params))
         return response.rows.map(row => asDoc(row.doc))
       },
-      { afterDate, limit }
+      { afterDate, limit, useArchived }
     )
   }
 
@@ -299,7 +312,13 @@ export function makeRollingDatabase<T>(
     connection: ServerScope,
     opts: RollingViewParams
   ): AsyncIterableIterator<CouchDoc<T>> {
-    const { afterDate, partition, useArchived = false, ...rest } = opts
+    const {
+      afterDate,
+      partition,
+      useArchived,
+      // Native CouchDB options:
+      ...rest
+    } = opts
 
     return streamingQuery(
       connection,
@@ -320,7 +339,14 @@ export function makeRollingDatabase<T>(
     view: string,
     opts: RollingViewParams
   ): Promise<Array<CouchDoc<T>>> {
-    const { afterDate, limit, partition, ...rest } = opts
+    const {
+      afterDate,
+      partition,
+      useArchived,
+      // Native CouchDB options:
+      limit,
+      ...rest
+    } = opts
 
     return await rollingQuery(
       connection,
@@ -332,7 +358,7 @@ export function makeRollingDatabase<T>(
           : db.partitionedView(partition, design, view, params))
         return response.rows.map(row => asDoc(row.doc))
       },
-      { afterDate, limit }
+      { afterDate, limit, useArchived }
     )
   }
 
@@ -342,7 +368,13 @@ export function makeRollingDatabase<T>(
     view: string,
     opts: RollingViewParams
   ): AsyncIterableIterator<CouchDoc<T>> {
-    const { afterDate, partition, useArchived = false, ...rest } = opts
+    const {
+      afterDate,
+      partition,
+      useArchived,
+      // Native CouchDB options:
+      ...rest
+    } = opts
 
     return streamingQuery(
       connection,
