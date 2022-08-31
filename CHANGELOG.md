@@ -1,5 +1,10 @@
 # edge-server-tools
 
+## 0.2.16 (2022-08-31)
+
+- added: Add a `RollingDatabase.reduce` method.
+- fixed: Correctly handle `useArchived` in all rolling database methods.
+
 ## 0.2.15 (2022-07-21)
 
 - added: Add a `AggregateError` ponyfill and related utilities.
