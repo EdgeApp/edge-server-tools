@@ -162,8 +162,16 @@ type RollingDatabaseList = Array<{
 export function makeRollingDatabase<T>(
   setupInfo: RollingDatabaseSetup<T>
 ): RollingDatabase<T> {
-  const { name, archiveStart, cleaner, getDate, period, ...setupRest } =
-    setupInfo
+  const {
+    ignoreMissing = false,
+    name,
+    archiveStart,
+    cleaner,
+    getDate,
+    period,
+    tags = ignoreMissing ? ['#archived'] : [],
+    ...setupRest
+  } = setupInfo
   const asDoc = asCouchDoc(cleaner)
   const wasDoc = uncleaner(asDoc)
 
@@ -537,9 +545,10 @@ export function makeRollingDatabase<T>(
       cleanups.forEach(cleanup => cleanup())
       cleanups = []
       for (const { archived, name } of list) {
-        const setup: DatabaseSetup = { name, ...setupRest }
-        if (archived) {
-          setup.ignoreMissing = true
+        const setup: DatabaseSetup = {
+          ...setupRest,
+          name,
+          tags: archived ? [...tags, '#archived'] : tags
         }
         cleanups.push(await setupDatabase(connection, setup, opts))
       }
@@ -582,7 +591,10 @@ export function makeRollingDatabase<T>(
 
 const asListEntry = asCouchDoc(
   asObject({
+    // Tags the database as "#archived",
+    // so the replicator setup can filter it from certain clusters:
     archived: asOptional(asBoolean, false),
+
     startDate: asDate
   })
 )

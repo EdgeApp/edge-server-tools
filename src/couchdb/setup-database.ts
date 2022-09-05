@@ -5,8 +5,11 @@ import {
   asMaybeExistsError,
   asMaybeNotFoundError
 } from './couch-error-cleaners'
-import { ReplicatorDocument, ReplicatorEndpoint } from './replicator-document'
-import { ReplicatorSetupDocument } from './replicator-setup-document'
+import {
+  clusterHasDatabase,
+  makeReplicatorDocuments,
+  ReplicatorSetupDocument
+} from './replicator-setup-document'
 import { SyncedDocument } from './synced-document'
 import { watchDatabase, WatchDatabaseOptions } from './watch-database'
 
@@ -27,9 +30,10 @@ export interface DatabaseSetup
   // Documents that we should create, unless they already exist:
   templates?: { [id: string]: object }
 
-  // Do not create the database if it is missing.
-  // This also disables replication,
-  // since the database might be missing on the remote side:
+  // Used for filtering, in addition to the wallet name:
+  tags?: Array<`#${string}`>
+
+  // Deprecated. Adds '#archived' to default tag list:
   ignoreMissing?: boolean
 
   // Deprecated. Put this in the options instead:
@@ -38,10 +42,11 @@ export interface DatabaseSetup
 
 export interface SetupDatabaseOptions {
   // The couch cluster name the current client is connected to,
-  // to enable replicating to or from this instance.
+  // as described in the replicator setup document.
+  // This controls which databases and replications we create:
   currentCluster?: string
 
-  // Servers to use for replication:
+  // Describes which database and replications should exist on each cluster:
   replicatorSetup?: SyncedDocument<ReplicatorSetupDocument>
 
   // The setup routine will subscribe to the changes feed if
@@ -57,7 +62,7 @@ export interface SetupDatabaseOptions {
 }
 
 /**
- * Ensures that the requested database exists in Couch.
+ * Ensures that the requested database exists in CouchDB.
  * Returns a cleanup function, which removes any background tasks.
  */
 export async function setupDatabase(
@@ -65,18 +70,8 @@ export async function setupDatabase(
   setupInfo: DatabaseSetup,
   opts: SetupDatabaseOptions = {}
 ): Promise<() => void> {
-  const cleanups: Array<() => void> = []
+  const { name, onChange, syncedDocuments = [] } = setupInfo
   const {
-    documents = {},
-    ignoreMissing = false,
-    name,
-    onChange,
-    options,
-    syncedDocuments = [],
-    templates = {}
-  } = setupInfo
-  const {
-    currentCluster,
     replicatorSetup = setupInfo.replicatorSetup,
     disableWatching = false,
     log = console.log,
@@ -89,12 +84,60 @@ export async function setupDatabase(
       ? nano(connectionOrUri)
       : connectionOrUri
 
-  // Create missing databases:
+  // Run the setup once to ensure the database exists:
+  const db = await doSetup(connection, setupInfo, opts)
+  if (db == null) return () => {}
+
+  // Update or watch synced documents:
+  const cleanups: Array<() => void> = []
+  const canWatch = onChange != null || syncedDocuments.length > 0
+  if (canWatch && !disableWatching) {
+    cleanups.push(
+      await watchDatabase(db, { onChange, onError, syncedDocuments })
+    )
+  } else {
+    await Promise.all(syncedDocuments.map(async doc => await doc.sync(db)))
+  }
+
+  // Watch the replicator document:
+  if (replicatorSetup != null && !disableWatching) {
+    cleanups.push(
+      replicatorSetup.onChange(() => {
+        doSetup(connection, setupInfo, opts).catch(onError)
+      })
+    )
+  }
+
+  return () => cleanups.forEach(cleanup => cleanup())
+}
+
+/**
+ * Performs the actual work of database setup.
+ * This is a one-shot process, and doesn't subscribe to anything.
+ */
+async function doSetup(
+  connection: nano.ServerScope,
+  setupInfo: DatabaseSetup,
+  opts: SetupDatabaseOptions
+): Promise<DocumentScope<unknown> | undefined> {
+  const { documents = {}, name, options, templates = {} } = setupInfo
+  const { currentCluster = 'default', log = console.log } = opts
+  const replicatorSetup = opts.replicatorSetup?.doc ??
+    setupInfo.replicatorSetup?.doc ?? { clusters: {} }
+
+  // Bail out if the current cluster doesn't have this database:
+  const { exists, replicated } = clusterHasDatabase(
+    replicatorSetup,
+    currentCluster,
+    setupInfo
+  )
+  if (!exists) return
+
+  // Create the database if needed:
   const existingInfo = await connection.db.get(name).catch(error => {
     if (asMaybeNotFoundError(error) == null) throw error
   })
   if (existingInfo == null) {
-    if (ignoreMissing) return () => {}
     await connection.db.create(name, options).catch(error => {
       if (asMaybeExistsError(error) == null) throw error
     })
@@ -128,101 +171,26 @@ export async function setupDatabase(
     }
   }
 
-  // Update or watch synced documents:
-  const canWatch = onChange != null || syncedDocuments.length > 0
-  if (canWatch && !disableWatching) {
-    cleanups.push(
-      await watchDatabase(db, { onChange, onError, syncedDocuments })
-    )
-  } else {
-    await Promise.all(syncedDocuments.map(async doc => await doc.sync(db)))
-  }
-
-  // Set up replication.
-  if (replicatorSetup != null && currentCluster != null && !ignoreMissing) {
+  if (replicated) {
     // Figure out the current username:
     const sessionInfo = await connection.session()
     const currentUsername: string = sessionInfo.userCtx.name
 
-    // Helper to create replication documents on demand:
-    const setupReplicator = async (): Promise<void> => {
-      const { clusters } = replicatorSetup.doc
-
-      // Bail out if the current cluster is missing from the list:
-      const current = clusters[currentCluster]
-      if (current == null) return
-
-      // Who do we replicate with?
-      const { exclude: localExclude = [], include: localInclude = ['*'] } =
-        current
-
-      function makeEndpoint(clusterName: string): ReplicatorEndpoint {
-        const row = clusters[clusterName]
-        const url = `${row.url.replace(/[/]$/, '')}/${name}`
-        return row.basicAuth == null
-          ? url
-          : { url, headers: { Authorization: `Basic ${row.basicAuth}` } }
-      }
-
-      const documents: { [name: string]: ReplicatorDocument } = {}
-      for (const remoteCluster of Object.keys(clusters)) {
-        if (remoteCluster === currentCluster) continue
-        const { exclude: remoteExclude = [], include: remoteInclude = ['*'] } =
-          clusters[remoteCluster]
-
-        if (!includesName(localInclude, name)) continue
-        if (!includesName(remoteInclude, name)) continue
-        if (includesName(localExclude, name)) continue
-        if (includesName(remoteExclude, name)) continue
-
-        if (includesName(current.pullFrom, remoteCluster)) {
-          documents[`${name}.from.${remoteCluster}`] = {
-            continuous: true,
-            create_target: false,
-            owner: currentUsername,
-            source: makeEndpoint(remoteCluster),
-            target: makeEndpoint(currentCluster)
-          }
-        }
-
-        if (includesName(current.pushTo, remoteCluster)) {
-          documents[`${name}.to.${remoteCluster}`] = {
-            continuous: true,
-            create_target: true,
-            create_target_params: options,
-            owner: currentUsername,
-            source: makeEndpoint(currentCluster),
-            target: makeEndpoint(remoteCluster)
-          }
-        }
-      }
-      await setupDatabase(
-        connection,
-        { name: '_replicator', documents },
-        { ...opts, replicatorSetup: undefined }
-      )
-    }
-
-    // Subscribe to changes in the replicator setup document:
-    cleanups.push(
-      replicatorSetup.onChange(() => {
-        setupReplicator().catch(onError)
-      })
+    // Set up replication:
+    await doSetup(
+      connection,
+      {
+        name: '_replicator',
+        documents: makeReplicatorDocuments(
+          replicatorSetup,
+          currentCluster,
+          currentUsername,
+          setupInfo
+        )
+      },
+      opts
     )
-    await setupReplicator()
   }
 
-  return () => cleanups.forEach(cleanup => cleanup())
-}
-
-/**
- * Returns true if a list includes a name.
- * If a list row ends with '*', treat that like a wildcard.
- */
-function includesName(list: string[], name: string): boolean {
-  const found = list.find(
-    row =>
-      row === (/\*$/.test(row) ? name.slice(0, row.length - 1) + '*' : name)
-  )
-  return found != null
+  return db
 }
