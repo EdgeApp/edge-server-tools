@@ -1,8 +1,15 @@
-import { asArray, asOptional, asString, asValue } from 'cleaners'
+import {
+  asArray,
+  asMaybe,
+  asObject,
+  asString,
+  asValue,
+  Cleaner
+} from 'cleaners'
 
 import { asHealingObject } from '../cleaners/as-healing-object'
 
-interface ClusterRow {
+interface ReplicatorCluster {
   // The base URI to connect to:
   url: string
 
@@ -12,23 +19,19 @@ interface ClusterRow {
 
   // Database names to replicate with this cluster.
   // Use an ending '*' for wildcard matching.
-  // The `exclude` list defaults to `[]`.
-  // The `include` list defaults to `['*']`.
+  // For example, 'logs-*' matches things like 'logs-2019' or 'logs-2020'.
   exclude?: string[]
   include?: string[]
 
   // Cluster names to replicate with.
   // Use an ending '*' for wildcard matching.
-  // The `pullFrom` list defaults to all peers in "source" mode.
-  // The `pushTo` list defaults to all peers in "target" mode.
-  //
-  // The `mode` flag is deprecated,
-  // so it is better to fill these in manually.
-  pullFrom?: string[]
-  pushTo?: string[]
+  // For example, 'logs-*' matches things like 'logs-eu' or 'logs-us'.
+  pullFrom: string[]
+  pushTo: string[]
+}
 
-  // Deprecated. See `pushTo` and `pullFrom`.
-  mode?: 'both' | 'source' | 'target'
+interface ReplicatorClusters {
+  [clusterName: string]: ReplicatorCluster
 }
 
 /**
@@ -36,38 +39,64 @@ interface ClusterRow {
  * indexed by their friendly cluster name.
  */
 export interface ReplicatorSetupDocument {
-  clusters: {
-    [clusterName: string]: ClusterRow
-  }
+  clusters: ReplicatorClusters
 }
-
-const asClusterRow = asHealingObject<ClusterRow>(
-  {
-    url: asString,
-    basicAuth: asString,
-    exclude: asOptional(asArray(asString)),
-    include: asOptional(asArray(asString)),
-    pullFrom: asOptional(asArray(asString)),
-    pushTo: asOptional(asArray(asString)),
-    mode: asOptional(asValue('both', 'source', 'target'))
-  },
-  {
-    url: '',
-    pullFrom: [],
-    pushTo: []
-  }
-)
 
 /**
  * Validates a replicator setup document.
- * Handles errors gracefully for use with with `syncedDocument`.
+ * Handles errors gracefully for use with with `syncedDocument`,
+ * and upgrades legacy fields.
  */
-export const asReplicatorSetupDocument =
-  asHealingObject<ReplicatorSetupDocument>(
-    {
-      clusters: asHealingObject(asClusterRow)
-    },
-    {
-      clusters: {}
+export const asReplicatorSetupDocument: Cleaner<ReplicatorSetupDocument> =
+  raw => {
+    const { clusters: rawClusters, ...rest } = asReplicatorSetupRaw(raw)
+
+    const clusters: ReplicatorClusters = {}
+    for (const name of Object.keys(rawClusters)) {
+      const cluster = rawClusters[name]
+      const {
+        url = '',
+        basicAuth,
+        exclude,
+        include,
+        pullFrom = Object.keys(rawClusters).filter(peerName => {
+          if (peerName === name) return false
+          const { mode } = rawClusters[peerName]
+          return mode === 'both' || mode === 'source'
+        }),
+        pushTo = Object.keys(rawClusters).filter(peerName => {
+          if (peerName === name) return false
+          const { mode } = rawClusters[peerName]
+          return mode === 'both' || mode === 'target'
+        })
+      } = cluster
+
+      clusters[name] = {
+        url,
+        basicAuth,
+        exclude,
+        include,
+        pullFrom,
+        pushTo
+      }
     }
-  )
+
+    return { ...rest, clusters }
+  }
+
+const asClusterRowRaw = asObject({
+  url: asMaybe(asString),
+  basicAuth: asMaybe(asString),
+  exclude: asMaybe(asArray(asString)),
+  include: asMaybe(asArray(asString)),
+  pullFrom: asMaybe(asArray(asString)),
+  pushTo: asMaybe(asArray(asString)),
+
+  // This has been replaced by `pushTo` and `pullFrom`,
+  // so we use it to fill the defaults for those two fields.
+  mode: asMaybe(asValue('both', 'source', 'target'))
+})
+
+const asReplicatorSetupRaw = asObject({
+  clusters: asHealingObject(asClusterRowRaw)
+})

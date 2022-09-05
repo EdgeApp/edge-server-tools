@@ -153,18 +153,8 @@ export async function setupDatabase(
       if (current == null) return
 
       // Who do we replicate with?
-      const {
-        exclude: localExclude = [],
-        include: localInclude = ['*'],
-        pullFrom = Object.keys(clusters).filter(name => {
-          const { mode } = clusters[name]
-          return mode === 'both' || mode === 'source'
-        }),
-        pushTo = Object.keys(clusters).filter(name => {
-          const { mode } = clusters[name]
-          return mode === 'both' || mode === 'target'
-        })
-      } = current
+      const { exclude: localExclude = [], include: localInclude = ['*'] } =
+        current
 
       function makeEndpoint(clusterName: string): ReplicatorEndpoint {
         const row = clusters[clusterName]
@@ -185,7 +175,7 @@ export async function setupDatabase(
         if (includesName(localExclude, name)) continue
         if (includesName(remoteExclude, name)) continue
 
-        if (includesName(pullFrom, remoteCluster)) {
+        if (includesName(current.pullFrom, remoteCluster)) {
           documents[`${name}.from.${remoteCluster}`] = {
             continuous: true,
             create_target: false,
@@ -195,7 +185,7 @@ export async function setupDatabase(
           }
         }
 
-        if (includesName(pushTo, remoteCluster)) {
+        if (includesName(current.pushTo, remoteCluster)) {
           documents[`${name}.to.${remoteCluster}`] = {
             continuous: true,
             create_target: true,
