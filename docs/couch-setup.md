@@ -214,7 +214,7 @@ You can also turn the base64 back to plain text by using `atob`.
 
 In this example, the "production" cluster has a `pushTo` list, which tells it to push changes out to the "logs" and "backup" clusters. The `setupDatabase` function will not create any replication documents on the other clusters, since they don't have `pushTo` or `pullFrom` properties.
 
-Since the "logs" cluster has an `include` filter, the "production" cluster will will only push databases whose names start with "logs-" to that cluster. Clusters can also specify an `exclude` filter to avoid having specific databases pushed or pulled from them.
+Since the "logs" cluster has an `include` filter, the `setupDatabase` routine will only create and replicate databases with names that start with "logs-" on this cluster. Clusters can also specify an `exclude` filter to avoid creating specific databases, and a `localOnly` filter to create databases but not replicate them. Databases can also have tags, such as "#archived" or "#secret", which also apply to the replicator filters.
 
 ### Enabling Replication
 
