@@ -1,5 +1,13 @@
 # edge-server-tools
 
+## 0.2.17 (2022-09-12)
+
+- added: Add a `DatabaseSetup.tags` array, which we match with the `include` and `exclude` filters in addition to the database name.
+- changed: Auto-upgrade replication setup documents in the database. Deprecated fields will turn into modern fields.
+- changed: Use replication documents to control which databases should exist on which clusters.
+- changed: Add an `#archived` tag to rolling databases that have the `archived` mode, instead of setting `ignoreMissing` to true.
+- deprecated: Replace the `ignoreMissing` flag with the tagging and filtering system.
+
 ## 0.2.16 (2022-08-31)
 
 - added: Add a `RollingDatabase.reduce` method.
