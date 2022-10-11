@@ -25,6 +25,7 @@ import {
 } from '..'
 import { PeriodicMonth, pickPeriodicMonth } from '../util/periodic-month'
 import { withMutex } from '../util/with-mutex'
+import { clusterHasDatabase } from './replicator-setup-document'
 
 /**
  * Describes a rolling collection of Couch databases that should exist.
@@ -472,11 +473,13 @@ export function makeRollingDatabase<T>(
   ): Promise<() => void> {
     let cleanups: Array<() => void> = []
     const {
+      currentCluster,
       disableWatching = false,
       log = console.log,
       onError = error => {
         log(`Error while maintaining "${name}" databases: ${String(error)}`)
-      }
+      },
+      replicatorSetup = setupInfo.replicatorSetup
     } = opts
 
     // Ensure we have a list database:
@@ -542,20 +545,31 @@ export function makeRollingDatabase<T>(
         await addDb(`${name}-${suffix}`, date)
       }
 
-      // Ensure that each new database exists:
+      // Reset the cleanup list:
       cleanups.forEach(cleanup => cleanup())
       cleanups = []
-      for (const { archived, name } of list) {
+
+      // Ensure that each new database exists:
+      const existingDatabases: RollingDatabaseList = []
+      for (const row of list) {
         const setup: DatabaseSetup = {
           ...setupRest,
-          name,
-          tags: archived ? [...tags, '#archived'] : tags
+          name: row.name,
+          tags: row.archived ? [...tags, '#archived'] : tags
         }
-        cleanups.push(await setupDatabase(connection, setup, opts))
+        const { exists } = clusterHasDatabase(
+          replicatorSetup?.doc,
+          currentCluster,
+          setup
+        )
+        if (exists) {
+          cleanups.push(await setupDatabase(connection, setup, opts))
+          existingDatabases.push(row)
+        }
       }
 
       // Make the list available to queries:
-      databases = list
+      databases = existingDatabases
     })
 
     // Do the initial processing:
