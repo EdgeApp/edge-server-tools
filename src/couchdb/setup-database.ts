@@ -43,7 +43,8 @@ export interface DatabaseSetup
 export interface SetupDatabaseOptions {
   // The couch cluster name the current client is connected to,
   // as described in the replicator setup document.
-  // This controls which databases and replications we create:
+  // This controls which databases and replications we create.
+  // Falls back to "default" if missing:
   currentCluster?: string
 
   // Describes which database and replications should exist on each cluster:
