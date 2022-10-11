@@ -149,7 +149,7 @@ export interface RollingDatabase<T> {
  * before the query routines try to access it and fail.
  */
 type RollingDatabaseList = Array<{
-  // True to ignore this database:
+  // True to tag this database as '#archived':
   archived: boolean
 
   // The database name:
@@ -482,6 +482,7 @@ export function makeRollingDatabase<T>(
     // Ensure we have a list database:
     const listDbSetup: DatabaseSetup = {
       name: `${name}-list`,
+      tags,
       onChange() {
         readDbList().catch(onError)
       }
