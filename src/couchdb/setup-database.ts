@@ -122,13 +122,15 @@ async function doSetup(
   opts: SetupDatabaseOptions
 ): Promise<DocumentScope<unknown> | undefined> {
   const { documents = {}, name, options, templates = {} } = setupInfo
-  const { currentCluster = 'default', log = console.log } = opts
-  const replicatorSetup = opts.replicatorSetup?.doc ??
-    setupInfo.replicatorSetup?.doc ?? { clusters: {} }
+  const {
+    currentCluster,
+    log = console.log,
+    replicatorSetup = setupInfo.replicatorSetup
+  } = opts
 
   // Bail out if the current cluster doesn't have this database:
   const { exists, replicated } = clusterHasDatabase(
-    replicatorSetup,
+    replicatorSetup?.doc,
     currentCluster,
     setupInfo
   )
@@ -183,7 +185,7 @@ async function doSetup(
       {
         name: '_replicator',
         documents: makeReplicatorDocuments(
-          replicatorSetup,
+          replicatorSetup?.doc,
           currentCluster,
           currentUsername,
           setupInfo
