@@ -93,59 +93,58 @@ export const asReplicatorSetupDocument: Cleaner<ReplicatorSetupDocument> =
  * Creates the documents we need to add to the replicator database.
  */
 export function makeReplicatorDocuments(
-  replicatorSetup: ReplicatorSetupDocument,
-  currentCluster: string,
+  replicatorSetup: ReplicatorSetupDocument | undefined,
+  clusterName: string | undefined,
   currentUsername: string,
   setupInfo: DatabaseSetup
 ): { [id: string]: ReplicatorDocument } {
   const documents: { [id: string]: ReplicatorDocument } = {}
-  const { clusters } = replicatorSetup
+  const { clusters } = replicatorSetup ?? { clusters: {} }
   const { name, options } = setupInfo
+
+  // Find the current cluster:
+  if (clusterName == null) clusterName = 'default'
+  const cluster = clusters[clusterName]
+  if (cluster == null) return documents
 
   // Bail out if the current cluster is missing from the list:
   const { replicated } = clusterHasDatabase(
     replicatorSetup,
-    currentCluster,
+    clusterName,
     setupInfo
   )
   if (!replicated) return documents
 
-  function makeEndpoint(clusterName: string): ReplicatorEndpoint {
-    const cluster = clusters[clusterName]
-    const url = `${cluster.url.replace(/[/]$/, '')}/${name}`
-    return cluster.basicAuth == null
-      ? url
-      : { url, headers: { Authorization: `Basic ${cluster.basicAuth}` } }
-  }
+  for (const remoteName of Object.keys(clusters)) {
+    const remoteCluster = clusters[remoteName]
 
-  const { pullFrom, pushTo } = clusters[currentCluster]
-  for (const remoteCluster of Object.keys(clusters)) {
-    if (remoteCluster === currentCluster) continue
+    // Skip this row if we don't replicate with it:
+    if (remoteName === clusterName) continue
     const { replicated } = clusterHasDatabase(
       replicatorSetup,
-      remoteCluster,
+      remoteName,
       setupInfo
     )
     if (!replicated) continue
 
-    if (includesName(pullFrom, remoteCluster)) {
-      documents[`${name}.from.${remoteCluster}`] = {
+    if (includesName(cluster.pullFrom, remoteName)) {
+      documents[`${name}.from.${remoteName}`] = {
         continuous: true,
         create_target: false,
         owner: currentUsername,
-        source: makeEndpoint(remoteCluster),
-        target: makeEndpoint(currentCluster)
+        source: makeEndpoint(remoteCluster, name),
+        target: makeEndpoint(cluster, name)
       }
     }
 
-    if (includesName(pushTo, remoteCluster)) {
-      documents[`${name}.to.${remoteCluster}`] = {
+    if (includesName(cluster.pushTo, remoteName)) {
+      documents[`${name}.to.${remoteName}`] = {
         continuous: true,
         create_target: true,
         create_target_params: options,
         owner: currentUsername,
-        source: makeEndpoint(currentCluster),
-        target: makeEndpoint(remoteCluster)
+        source: makeEndpoint(cluster, name),
+        target: makeEndpoint(remoteCluster, name)
       }
     }
   }
@@ -161,8 +160,8 @@ const LOCAL_ONLY = { exists: true, replicated: false }
  * Determines whether a particular database should exist on a cluster.
  */
 export function clusterHasDatabase(
-  replicatorSetup: ReplicatorSetupDocument,
-  clusterName: string,
+  replicatorSetup: ReplicatorSetupDocument | undefined,
+  clusterName: string | undefined,
   setupInfo: DatabaseSetup
 ): {
   exists: boolean
@@ -176,7 +175,7 @@ export function clusterHasDatabase(
   const names = [name, ...tags]
 
   // Default to local-only if we cannot find any cluster info:
-  const cluster = replicatorSetup.clusters[clusterName]
+  const cluster = replicatorSetup?.clusters[clusterName ?? 'default']
   if (cluster == null) return LOCAL_ONLY
   const { exclude = [], include = ['*'], localOnly = [] } = cluster
 
@@ -208,6 +207,16 @@ function includesName(list: string[], name: string): boolean {
       row === (/\*$/.test(row) ? name.slice(0, row.length - 1) + '*' : name)
   )
   return found != null
+}
+
+function makeEndpoint(
+  cluster: ReplicatorCluster,
+  db: string
+): ReplicatorEndpoint {
+  const url = `${cluster.url.replace(/[/]$/, '')}/${db}`
+  return cluster.basicAuth == null
+    ? url
+    : { url, headers: { Authorization: `Basic ${cluster.basicAuth}` } }
 }
 
 const asClusterRowRaw = asObject({

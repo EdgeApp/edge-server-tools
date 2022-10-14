@@ -25,6 +25,7 @@ import {
 } from '..'
 import { PeriodicMonth, pickPeriodicMonth } from '../util/periodic-month'
 import { withMutex } from '../util/with-mutex'
+import { clusterHasDatabase } from './replicator-setup-document'
 
 /**
  * Describes a rolling collection of Couch databases that should exist.
@@ -53,9 +54,6 @@ export interface RollingMangoQuery
 
   // Which partition should we use:
   partition?: string
-
-  // Include archived databases:
-  useArchived?: boolean
 }
 
 /**
@@ -67,9 +65,6 @@ export interface RollingViewParams extends DocumentViewParams {
 
   // Which partition should we use:
   partition?: string
-
-  // Include archived databases:
-  useArchived?: boolean
 }
 
 /**
@@ -149,7 +144,7 @@ export interface RollingDatabase<T> {
  * before the query routines try to access it and fail.
  */
 type RollingDatabaseList = Array<{
-  // True to ignore this database:
+  // True to tag this database as '#archived':
   archived: boolean
 
   // The database name:
@@ -199,22 +194,15 @@ export function makeRollingDatabase<T>(
   async function rollingQuery<R = CouchDoc<T>>(
     connection: ServerScope,
     callback: (db: nano.DocumentScope<unknown>, count: number) => Promise<R[]>,
-    opts: { afterDate?: Date; limit?: number; useArchived?: boolean } = {}
+    opts: { afterDate?: Date; limit?: number } = {}
   ): Promise<R[]> {
-    const { afterDate, limit, useArchived = false } = opts
+    const { afterDate, limit } = opts
 
     let out: R[] = []
     for (const database of databases) {
-      if (database.archived && !useArchived) continue
       const db = connection.use(database.name)
 
-      const response = await callback(db, out.length).catch(error => {
-        // Ignore errors in future or archived databases:
-        if (Date.now() < database.startDate.valueOf() || database.archived) {
-          return []
-        }
-        throw error
-      })
+      const response = await callback(db, out.length)
       out = out.concat(response)
 
       // Stop once we have enough results:
@@ -236,12 +224,11 @@ export function makeRollingDatabase<T>(
       db: nano.DocumentScope<unknown>,
       params: DocumentViewParams
     ) => Promise<Array<{ id: string; key: string; doc?: unknown }>>,
-    opts: { afterDate?: Date; chunkSize?: number; useArchived?: boolean } = {}
+    opts: { afterDate?: Date; chunkSize?: number } = {}
   ): AsyncIterableIterator<CouchDoc<T>> {
-    const { afterDate, chunkSize = 2048, useArchived = false, ...rest } = opts
+    const { afterDate, chunkSize = 2048, ...rest } = opts
 
     for (const database of databases) {
-      if (database.archived && !useArchived) continue
       const db = connection.use(database.name)
 
       let lastRow: { id: string; key: string } | undefined
@@ -256,13 +243,7 @@ export function makeRollingDatabase<T>(
           params.start_key = lastRow.key
           params.start_key_doc_id = lastRow.id
         }
-        const rows = await callback(db, params).catch(error => {
-          // Ignore errors in future or archived databases:
-          if (Date.now() < database.startDate.valueOf() || database.archived) {
-            return []
-          }
-          throw error
-        })
+        const rows = await callback(db, params)
         for (const row of rows) yield asDoc(row.doc)
 
         // Set up the next iteration:
@@ -287,7 +268,6 @@ export function makeRollingDatabase<T>(
     const {
       afterDate,
       partition,
-      useArchived,
       // Native CouchDB options:
       limit = 20,
       ...rest
@@ -302,7 +282,7 @@ export function makeRollingDatabase<T>(
           : db.partitionedFind(partition, query))
         return response.docs.map(doc => asDoc(doc))
       },
-      { afterDate, limit, useArchived }
+      { afterDate, limit }
     )
   }
 
@@ -313,7 +293,6 @@ export function makeRollingDatabase<T>(
     const {
       afterDate,
       partition,
-      useArchived,
       // Native CouchDB options:
       limit,
       ...rest
@@ -329,7 +308,7 @@ export function makeRollingDatabase<T>(
           : db.partitionedList(partition, params))
         return response.rows.map(row => asDoc(row.doc))
       },
-      { afterDate, limit, useArchived }
+      { afterDate, limit }
     )
   }
 
@@ -340,7 +319,6 @@ export function makeRollingDatabase<T>(
     const {
       afterDate,
       partition,
-      useArchived,
       // Native CouchDB options:
       ...rest
     } = opts
@@ -354,7 +332,7 @@ export function makeRollingDatabase<T>(
           : db.partitionedList(partition, allParams))
         return rows
       },
-      { afterDate, useArchived }
+      { afterDate }
     )
   }
 
@@ -368,7 +346,6 @@ export function makeRollingDatabase<T>(
       afterDate,
       cleaner,
       partition,
-      useArchived,
       // Native CouchDB options:
       ...rest
     } = params
@@ -383,7 +360,7 @@ export function makeRollingDatabase<T>(
         const [row] = response.rows
         return row == null ? [] : [cleaner(row.value)]
       },
-      { afterDate, useArchived }
+      { afterDate }
     )
 
     return values
@@ -398,7 +375,6 @@ export function makeRollingDatabase<T>(
     const {
       afterDate,
       partition,
-      useArchived,
       // Native CouchDB options:
       limit,
       ...rest
@@ -418,7 +394,7 @@ export function makeRollingDatabase<T>(
           : db.partitionedView(partition, design, view, params))
         return response.rows.map(row => asDoc(row.doc))
       },
-      { afterDate, limit, useArchived }
+      { afterDate, limit }
     )
   }
 
@@ -431,7 +407,6 @@ export function makeRollingDatabase<T>(
     const {
       afterDate,
       partition,
-      useArchived,
       // Native CouchDB options:
       ...rest
     } = opts
@@ -445,7 +420,7 @@ export function makeRollingDatabase<T>(
           : db.partitionedView(partition, design, view, allParams))
         return rows
       },
-      { afterDate, useArchived }
+      { afterDate }
     )
   }
 
@@ -472,16 +447,19 @@ export function makeRollingDatabase<T>(
   ): Promise<() => void> {
     let cleanups: Array<() => void> = []
     const {
+      currentCluster,
       disableWatching = false,
       log = console.log,
       onError = error => {
         log(`Error while maintaining "${name}" databases: ${String(error)}`)
-      }
+      },
+      replicatorSetup = setupInfo.replicatorSetup
     } = opts
 
     // Ensure we have a list database:
     const listDbSetup: DatabaseSetup = {
       name: `${name}-list`,
+      tags,
       onChange() {
         readDbList().catch(onError)
       }
@@ -541,20 +519,31 @@ export function makeRollingDatabase<T>(
         await addDb(`${name}-${suffix}`, date)
       }
 
-      // Ensure that each new database exists:
+      // Reset the cleanup list:
       cleanups.forEach(cleanup => cleanup())
       cleanups = []
-      for (const { archived, name } of list) {
+
+      // Ensure that each new database exists:
+      const existingDatabases: RollingDatabaseList = []
+      for (const row of list) {
         const setup: DatabaseSetup = {
           ...setupRest,
-          name,
-          tags: archived ? [...tags, '#archived'] : tags
+          name: row.name,
+          tags: row.archived ? [...tags, '#archived'] : tags
         }
-        cleanups.push(await setupDatabase(connection, setup, opts))
+        const { exists } = clusterHasDatabase(
+          replicatorSetup?.doc,
+          currentCluster,
+          setup
+        )
+        if (exists) {
+          cleanups.push(await setupDatabase(connection, setup, opts))
+          existingDatabases.push(row)
+        }
       }
 
       // Make the list available to queries:
-      databases = list
+      databases = existingDatabases
     })
 
     // Do the initial processing:

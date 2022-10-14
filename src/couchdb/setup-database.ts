@@ -43,7 +43,8 @@ export interface DatabaseSetup
 export interface SetupDatabaseOptions {
   // The couch cluster name the current client is connected to,
   // as described in the replicator setup document.
-  // This controls which databases and replications we create:
+  // This controls which databases and replications we create.
+  // Falls back to "default" if missing:
   currentCluster?: string
 
   // Describes which database and replications should exist on each cluster:
@@ -121,13 +122,15 @@ async function doSetup(
   opts: SetupDatabaseOptions
 ): Promise<DocumentScope<unknown> | undefined> {
   const { documents = {}, name, options, templates = {} } = setupInfo
-  const { currentCluster = 'default', log = console.log } = opts
-  const replicatorSetup = opts.replicatorSetup?.doc ??
-    setupInfo.replicatorSetup?.doc ?? { clusters: {} }
+  const {
+    currentCluster,
+    log = console.log,
+    replicatorSetup = setupInfo.replicatorSetup
+  } = opts
 
   // Bail out if the current cluster doesn't have this database:
   const { exists, replicated } = clusterHasDatabase(
-    replicatorSetup,
+    replicatorSetup?.doc,
     currentCluster,
     setupInfo
   )
@@ -182,7 +185,7 @@ async function doSetup(
       {
         name: '_replicator',
         documents: makeReplicatorDocuments(
-          replicatorSetup,
+          replicatorSetup?.doc,
           currentCluster,
           currentUsername,
           setupInfo
