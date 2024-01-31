@@ -5,6 +5,10 @@
 - fixed: Apply the rolling database tags to the list database.
 - removed: Ignore the rolling database `useArchived` flag, and instead rely on the replicator setup to decide what to query.
 
+## 0.2.18 (2024-01-30)
+
+- changed: Upgraded nano to 10.1.3
+
 ## 0.2.17 (2022-09-12)
 
 - added: Add a `DatabaseSetup.tags` array, which we match with the `include` and `exclude` filters in addition to the database name.
