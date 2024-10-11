@@ -1,13 +1,17 @@
 # edge-server-tools
 
+## 0.2.20 (2024-10-11)
+
+- fixed: Add missing TypeScript entrypoint.
+
+## 0.2.19 (2024-01-30)
+
+- changed: Upgraded nano to 10.1.3
+
 ## 0.2.18 (2022-10-14)
 
 - fixed: Apply the rolling database tags to the list database.
 - removed: Ignore the rolling database `useArchived` flag, and instead rely on the replicator setup to decide what to query.
-
-## 0.2.18 (2024-01-30)
-
-- changed: Upgraded nano to 10.1.3
 
 ## 0.2.17 (2022-09-12)
 
