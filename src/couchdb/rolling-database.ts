@@ -31,16 +31,16 @@ import { clusterHasDatabase } from './replicator-setup-document'
  * Describes a rolling collection of Couch databases that should exist.
  */
 export interface RollingDatabaseSetup<T> extends DatabaseSetup {
-  // How far back should we create archive databases:
+  /** How far back should we create archive databases. */
   archiveStart?: Date
 
-  // Cleans documents stored in the databases:
+  /** Cleans documents stored in the databases. */
   cleaner: Cleaner<T>
 
-  // Extracts the date from a stored document:
+  /** Extracts the date from a stored document. */
   getDate: (doc: CouchDoc<T>) => Date
 
-  // How often to create new databases:
+  /** How often to create new databases. */
   period: PeriodicMonth
 }
 
@@ -49,10 +49,10 @@ export interface RollingDatabaseSetup<T> extends DatabaseSetup {
  */
 export interface RollingMangoQuery
   extends Pick<MangoQuery, 'limit' | 'selector' | 'sort'> {
-  // How far in the past we should look. Defaults to no limit:
+  /** How far in the past we should look. Defaults to no limit. */
   afterDate?: Date
 
-  // Which partition should we use:
+  /** Which partition should we use. */
   partition?: string
 }
 
@@ -60,10 +60,10 @@ export interface RollingMangoQuery
  * Arguments to the rolling database view query.
  */
 export interface RollingViewParams extends DocumentViewParams {
-  // How far in the past we should look. Defaults to no limit:
+  /** How far in the past we should look. Defaults to no limit */
   afterDate?: Date
 
-  // Which partition should we use:
+  /** Which partition should we use. */
   partition?: string
 }
 
@@ -71,7 +71,7 @@ export interface RollingViewParams extends DocumentViewParams {
  * Arguments to the rolling database reduce query.
  */
 export interface RollingReduceParams<R> extends RollingViewParams {
-  // Cleans the view output:
+  /** Cleans the view output. */
   cleaner: Cleaner<R>
 }
 
@@ -144,13 +144,13 @@ export interface RollingDatabase<T> {
  * before the query routines try to access it and fail.
  */
 type RollingDatabaseList = Array<{
-  // True to tag this database as '#archived':
+  /** True to tag this database as '#archived'. */
   archived: boolean
 
-  // The database name:
+  /** The database name. */
   name: string
 
-  // The date we start writing documents to this database:
+  /** The date we start writing documents to this database. */
   startDate: Date
 }>
 

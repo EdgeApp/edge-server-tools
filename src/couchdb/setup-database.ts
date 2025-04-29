@@ -18,52 +18,60 @@ import { watchDatabase, WatchDatabaseOptions } from './watch-database'
  */
 export interface DatabaseSetup
   extends Pick<WatchDatabaseOptions, 'onChange' | 'syncedDocuments'> {
-  // The database name:
+  /** The database name. */
   name: string
 
-  // Options to pass to CouchDB when creating this database:
+  /** Options to pass to CouchDB when creating this database. */
   options?: DatabaseCreateParams
 
-  // Documents that should exactly match:
+  /** Documents that should exactly match. */
   documents?: { [id: string]: object }
 
-  // Documents that we should create, unless they already exist:
+  /** Documents that we should create, unless they already exist. */
   templates?: { [id: string]: object }
 
-  // Used for filtering, in addition to the wallet name:
+  /** Used for replicator filtering, in addition to the wallet name. */
   tags?: Array<`#${string}`>
 
-  // Deprecated. Adds '#archived' to default tag list:
+  /** @deprecated Adds '#archived' to default tag list. */
   ignoreMissing?: boolean
 
-  // Deprecated. Put this in the options instead:
+  /** @deprecated Put this in the options instead. */
   replicatorSetup?: SyncedDocument<ReplicatorSetupDocument>
 }
 
 export interface SetupDatabaseOptions {
-  // The couch cluster name the current client is connected to,
-  // as described in the replicator setup document.
-  // This controls which databases and replications we create.
-  // Falls back to "default" if missing:
+  /**
+   * The couch cluster name the current client is connected to,
+   * as described in the replicator setup document.
+   * This controls which databases and replications we create.
+   * Falls back to "default" if missing:
+   */
   currentCluster?: string
 
-  // Describes which database and replications should exist on each cluster:
+  /**
+   * Describes which database and replications should exist
+   * on each cluster
+   */
   replicatorSetup?: SyncedDocument<ReplicatorSetupDocument>
 
-  // The setup routine will subscribe to the changes feed if
-  // the setup includes an `onChange` callback or synced documents.
-  // This option disables watching, performing a one-time sync instead.
+  /**
+   * The setup routine will subscribe to the changes feed if
+   * the setup includes an `onChange` callback or synced documents.
+   * This option disables watching, performing a one-time sync instead.
+   */
   disableWatching?: boolean
 
-  // Logs status messages whenever we write things to Couch:
+  /** Logs status messages whenever we write things to Couch. */
   log?: (message: string) => void
 
-  // Logs error messages whenever something goes wrong:
+  /** Logs error messages whenever something goes wrong. */
   onError?: (error: unknown) => void
 }
 
 /**
  * Ensures that the requested database exists in CouchDB.
+ *
  * Returns a cleanup function, which removes any background tasks.
  */
 export async function setupDatabase(

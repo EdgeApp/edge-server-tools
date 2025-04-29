@@ -11,25 +11,45 @@ import { asHealingObject } from '../cleaners/as-healing-object'
 import { ReplicatorDocument, ReplicatorEndpoint } from './replicator-document'
 import { DatabaseSetup } from './setup-database'
 
+/**
+ * Configures which databases a CouchDB cluster contains,
+ * and who it replicates with.
+ *
+ * The various filters wildcard matching with a trailing `*`,
+ * For example, 'logs-*' matches 'logs-2019' and 'logs-2020'.
+ */
 interface ReplicatorCluster {
-  // The base URI to connect to:
+  /** The base URI to connect to. */
   url: string
 
-  // The base64 "username:password" pair used to authenticate.
-  // To get this, run `btoa('username:password')` in a JS console:
+  /**
+   * The base64-encoded "username:password" used for authentication.
+   * To generate this, run `btoa('username:password')` in a browser console.
+   */
   basicAuth?: string
 
-  // Database names that exist on this cluster.
-  // Use an ending '*' for wildcard matching.
-  // For example, 'logs-*' matches things like 'logs-2019' or 'logs-2020'.
-  exclude?: string[] // Do not create or replicate these
-  include?: string[] // Create and replicate these
-  localOnly?: string[] // Create these but don't replicate them
+  /**
+   * List of databases to exclude from creation or replication.
+   * Supports wildcards and tags. Defaults to `['#exclude']`.
+   */
+  exclude?: string[]
 
-  // Cluster names to replicate with.
-  // Use an ending '*' for wildcard matching.
-  // For example, 'logs-*' matches things like 'logs-eu' or 'logs-us'.
+  /**
+   * List of databases to create and replicate.
+   * Supports wildcards and tags. Defaults to `[*]`
+   */
+  include?: string[]
+
+  /**
+   * List of databases to create but not replicate.
+   * Supports wildcards and tags.
+   */
+  localOnly?: string[]
+
+  /** Cluster names to replicate with. */
   pullFrom: string[]
+
+  /** Cluster names to replicate with. */
   pushTo: string[]
 }
 

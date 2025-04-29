@@ -72,12 +72,14 @@ export function stringifyCode(code: (...args: any[]) => unknown): string {
 }
 
 interface JsDesignOptions<Lib> {
-  // Methods available using 'require':
+  /** Methods available using 'require'. */
   lib?: Lib
 
-  // Transforms the Javascript source code.
-  // This could be anything from a simple search & replace
-  // to running something complicated like Babel:
+  /**
+   * Transforms the Javascript source code.
+   * This could be anything from a simple search & replace
+   * to running something complicated like Babel.
+   */
   fixJs?: (code: string) => string
 
   // Couch options:

@@ -10,13 +10,13 @@ export interface CouchChange {
 }
 
 export interface WatchDatabaseOptions {
-  // Documents to automatically keep up-to-date:
+  /** Documents to automatically keep up-to-date. */
   syncedDocuments?: Array<SyncedDocument<unknown>>
 
-  // Provides low-level access to the change feed:
+  /** Provides low-level access to the change feed. */
   onChange?: (change: CouchChange) => void
 
-  // Called if there is an error in the watching loop:
+  /** Called if there is an error in the watching loop. */
   onError?: (error: unknown) => void
 }
 
