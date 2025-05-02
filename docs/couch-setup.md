@@ -9,7 +9,11 @@
   - [Enabling Replication](#enabling-replication)
 - [Background Tasks](#background-tasks)
 
-## Basic Setup
+The edge-server-tools package can create & maintain CouchDB databases, design documents, and replications.
+
+These tools can also watch for changes to specific synced documents, such as settings.
+
+## Creating Databases
 
 First, create a `DatabaseSetup` object to describe the database:
 
@@ -54,7 +58,7 @@ This example will create a document named "\_design/mango-upc". The contents wil
 
 ### makeMangoIndex
 
-Use this function to create Mango index design documents. The first parameter is the name of the view (CouchDB doesn't really use this anywhere), and the second parameter is an array of properties to index over, using CouchDB's "sort syntax".
+Use this function to create Mango index design documents. The first parameter is the name of the view (CouchDB doesn't really use this anywhere), and the second parameter is an array of properties to index over, using CouchDB's [sort syntax](https://docs.couchdb.org/en/stable/api/database/find.html#sort-syntax).
 
 ```js
 makeMangoIndex('createdByDate', ['created', 'date'])
@@ -107,7 +111,7 @@ makeJsDesign(
 
 This example uses the `fixJs` option to convert "const" into "var" for the legacy JavaScript engine.
 
-If you need to access to utility functions, you can use CommonJS to inject them into the view:
+If you need access to utility functions, you can use CommonJS to inject them into the view:
 
 ```js
 import { normalizeIp, parseIp } from './ip-utils'
@@ -135,7 +139,7 @@ These library functions need to be completely standalone, and must use CouchDB's
 
 ## Watching Settings Documents
 
-While CouchDB is good at storing application data, it is also good at storing settings. Instead of using environment variables or JSON files on disk, putting settings inside CouchDB provides a nice admin interface for editing them, as well as automatic replication across the various servers.
+CouchDB is a convenient place to store app settings such as API keys or tuning parameters. Doing this provides live updates, automatic replication, and a nice admin interface using Fauxton.
 
 To watch a settings document for changes, use the `syncedDocument` helper function:
 
@@ -160,7 +164,9 @@ const connection = nano(couchUri)
 await setupDatabase(connection, settingsSetup)
 ```
 
-The `setupDatabase` will perform an initial sync, ensuring the document exists, and will then watch the document for any future changes, keeping it up to date. Simply access the `appSettings.doc` property to see the latest value, or subscribe to changes using the `onChange` method:
+The `setupDatabase` will perform an initial sync, ensuring the document exists. It will also watch the document for any future changes, keeping it up to date using the cleaner. The [Background Tasks](#background-tasks) section explains how to manage this background process.
+
+To see the latest document contents, simply access the `appSettings.doc` property. You can also subscribe to changes using the `onChange` method:
 
 ```js
 appSettings.onChange((newSettings) => console.log(newSettings))
@@ -189,12 +195,14 @@ The `setupDatabase` function can automatically create documents in the `_replica
     "production": {
       "url": "https://production.example.com:6984/",
       "basicAuth": "ZXhhbXBsZTpleGFtcGxl",
+      "exclude": ["#archived"],
       "pushTo": ["logs", "backup"]
     },
     "logs": {
       "url": "https://logs.example.com:6984/",
       "basicAuth": "ZXhhbXBsZTpleGFtcGxl",
-      "include": ["logs-*"]
+      "include": ["logs-*"],
+      "localOnly": ["settings"]
     },
     "backup": {
       "url": "https://backup.example.com:6984/",
@@ -203,14 +211,6 @@ The `setupDatabase` function can automatically create documents in the `_replica
   }
 }
 ```
-
-This example has three clusters, named "production", "logs", and "backup". Each cluster has a URL, a set of credentials, and options describing what to replicate. You can generate the credential strings by opening a browser console and running:
-
-```js
-btoa('username:password')
-```
-
-You can also turn the base64 back to plain text by using `atob`.
 
 In this example, the "production" cluster has a `pushTo` list, which tells it to push changes out to the "logs" and "backup" clusters. The `setupDatabase` function will not create any replication documents on the other clusters, since they don't have `pushTo` or `pullFrom` properties.
 
@@ -238,7 +238,6 @@ const settingsSetup: DatabaseSetup = {
 }
 
 // At app boot time:
-const connection = nano(couchUri)
 await setupDatabase(connection, settingsSetup)
 ```
 
