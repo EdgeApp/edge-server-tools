@@ -18,6 +18,7 @@ const asEdgeServersInternalResponse = asObject({
   )
 })
 
+/** @deprecated use `setupDatabase` instead. */
 export async function autoReplication(
   infoServerAddress: string,
   serverName: string,
@@ -64,6 +65,7 @@ export async function autoReplication(
   }
 }
 
+/** @deprecated use `setupDatabase` instead. */
 export async function dbReplication(
   sourceUrl: string,
   targetUrl: string
