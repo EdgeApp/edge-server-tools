@@ -9,9 +9,50 @@
   - [Enabling Replication](#enabling-replication)
 - [Background Tasks](#background-tasks)
 
-The edge-server-tools package can create & maintain CouchDB databases, design documents, and replications.
+The edge-server-tools package can create & maintain CouchDB databases, design documents, and replications. This maintenance can take place across multiple clusters or servers.
 
 These tools can also watch for changes to specific synced documents, such as settings.
+
+## Managing Credentials
+
+First, create a `CouchPool` object holding your connections to CouchDB. For simple cases, this just takes a URL:
+
+```js
+import { connectCouch } from 'edge-server-tools'
+
+const pool = connectCouch('http://admin:admin@localhost:5984/')
+```
+
+Or, if you want do auto-replication, you can provide a list of credentials and the name of the default cluster:
+
+```js
+const pool = connectCouch(
+  // The preferred cluster to use for most tasks:
+  'production',
+
+  // All the clusters we can access:
+  {
+    production: {
+      url: 'https://production.example.com:6984/',
+      username: 'admin',
+      password: 'admin',
+    },
+    logs: {
+      url: 'https://admin:admin@logs.example.com:6984/',
+    },
+    backup: 'https://admin:admin@backup.example.com:6984/'
+  }
+)
+```
+
+This example has three clusters, named "production", "logs", and "backup". These credentials would normally be stored on disk, perhaps using [cleaner-config](https://www.npmjs.com/package/cleaner-config). The main app server would generally contain all the credentials for the system and be responsible for maintenance tasks, while secondary servers might just connect directly to their own URL's.
+
+The `pool` object has a `default` property, which corresponds to the default cluster:
+
+```js
+const db = pool.default.use('my-db')
+await db.list()
+```
 
 ## Creating Databases
 
@@ -26,11 +67,10 @@ const productsSetup: DatabaseSetup = {
 Next, when your application starts up, use `setupDatabase` to ensure the database exists and has the right settings:
 
 ```ts
-const connection = nano(couchUri)
-await setupDatabase(connection, productsSetup)
+await setupDatabase(pool, productsSetup)
 ```
 
-This will ensure that the CouchDB instance contains a database named "products".
+If the pool contains credentials to multiple clusters, this will ensure that the database exists on each of them. If you only want to create this database on certain clusters, see the [Replication Setup](#replication-setup) section.
 
 If the database needs special CouchDB settings, pass those as `DatabaseSetup.options`:
 
@@ -160,11 +200,10 @@ const settingsSetup: DatabaseSetup = {
 }
 
 // At app boot time:
-const connection = nano(couchUri)
-await setupDatabase(connection, settingsSetup)
+await setupDatabase(pool, settingsSetup)
 ```
 
-The `setupDatabase` will perform an initial sync, ensuring the document exists. It will also watch the document for any future changes, keeping it up to date using the cleaner. The [Background Tasks](#background-tasks) section explains how to manage this background process.
+The `setupDatabase` will use the `pool.default` connection to perform an initial sync, ensuring the document exists. It will also watch the document for any future changes, keeping it up to date using the cleaner. The [Background Tasks](#background-tasks) section explains how to manage this background process.
 
 To see the latest document contents, simply access the `appSettings.doc` property. You can also subscribe to changes using the `onChange` method:
 
@@ -193,21 +232,14 @@ The `setupDatabase` function can automatically create documents in the `_replica
   "_rev": "12-6ee74490125b924e323807d9363d64a2",
   "clusters": {
     "production": {
-      "url": "https://production.example.com:6984/",
-      "basicAuth": "ZXhhbXBsZTpleGFtcGxl",
       "exclude": ["#archived"],
       "pushTo": ["logs", "backup"]
     },
     "logs": {
-      "url": "https://logs.example.com:6984/",
-      "basicAuth": "ZXhhbXBsZTpleGFtcGxl",
       "include": ["logs-*"],
       "localOnly": ["settings"]
     },
-    "backup": {
-      "url": "https://backup.example.com:6984/",
-      "basicAuth": "ZXhhbXBsZTpleGFtcGxl"
-    }
+    "backup": {}
   }
 }
 ```
@@ -238,7 +270,7 @@ const settingsSetup: DatabaseSetup = {
 }
 
 // At app boot time:
-await setupDatabase(connection, settingsSetup)
+await setupDatabase(pool, settingsSetup)
 ```
 
 Finally, pass `replicatorSetup` and `currentCluster` options to the various `setupDatabase` calls in your app:
@@ -246,16 +278,13 @@ Finally, pass `replicatorSetup` and `currentCluster` options to the various `set
 ```js
 const commonOptions = {
   replicatorSetup,
-
-  // This could be read from a JSON config file instead:
-  currentCluster: process.env.HOSTNAME,
+  // ...
 }
 
 // At app boot time:
-const connection = nano(couchUri)
-await setupDatabase(connection, settingsSetup, commonOptions)
-await setupDatabase(connection, productsSetup, commonOptions)
-await setupDatabase(connection, usersSetup, commonOptions)
+await setupDatabase(pool, settingsSetup, commonOptions)
+await setupDatabase(pool, productsSetup, commonOptions)
+await setupDatabase(pool, usersSetup, commonOptions)
 ```
 
 ## Background Tasks
@@ -263,7 +292,7 @@ await setupDatabase(connection, usersSetup, commonOptions)
 When setting up replication or synced documents, `setupDatabase` will create long-running background processes. These can interfere with CLI tools, which would like to exit quickly when they are done with their work. To avoid this problem, pass a `disableWatching` flag to `setupDatabase`:
 
 ```js
-setupDatabase(connection, someSetup, {
+setupDatabase(pool, someSetup, {
   disableWatching: true,
 })
 ```
@@ -271,7 +300,7 @@ setupDatabase(connection, someSetup, {
 The `setupDatabase` function also returns a cleanup function, which will stop all background work (eventually - it can take a while).
 
 ```js
-const cleanup = setupDatabase(connection, someSetup)
+const cleanup = setupDatabase(pool, someSetup)
 
 // Later, at shutdown time:
 cleanup()
@@ -280,7 +309,7 @@ cleanup()
 The database setup process can generate errors and messages, which go to the console by default, but can be intercepted by passing `log` and `onError` options:
 
 ```ts
-setupDatabase(connection, someSetup, {
+setupDatabase(pool, someSetup, {
   log(message: string) {
     console.log(message)
   },

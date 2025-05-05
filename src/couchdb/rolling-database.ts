@@ -18,6 +18,7 @@ import nano, {
 import {
   asCouchDoc,
   CouchDoc,
+  CouchPool,
   DatabaseSetup,
   makePeriodicTask,
   setupDatabase,
@@ -127,8 +128,12 @@ export interface RollingDatabase<T> {
     doc: CouchDoc<T>
   ) => Promise<DocumentInsertResponse>
 
+  /**
+   * Create & maintain the database across one or more clusters.
+   * Passing a single connection is deprecated - pass a pool instead.
+   */
   setup: (
-    connection: ServerScope,
+    pool: CouchPool | ServerScope,
     opts?: SetupDatabaseOptions
   ) => Promise<() => void>
 }
@@ -442,7 +447,7 @@ export function makeRollingDatabase<T>(
   }
 
   async function setup(
-    connection: ServerScope,
+    pool: CouchPool | ServerScope,
     opts: SetupDatabaseOptions = {}
   ): Promise<() => void> {
     let cleanups: Array<() => void> = []
@@ -450,6 +455,7 @@ export function makeRollingDatabase<T>(
       currentCluster,
       disableWatching = false,
       log = console.log,
+      watchCluster,
       onError = error => {
         log(`Error while maintaining "${name}" databases: ${String(error)}`)
       },
@@ -464,7 +470,13 @@ export function makeRollingDatabase<T>(
         readDbList().catch(onError)
       }
     }
-    const listDbCleanup = await setupDatabase(connection, listDbSetup, opts)
+    const listDbCleanup = await setupDatabase(pool, listDbSetup, opts)
+    const connection =
+      'relax' in pool
+        ? pool
+        : watchCluster == null
+        ? pool.default
+        : pool.connect(watchCluster)
     const listDb = connection.use(listDbSetup.name)
 
     /**
@@ -537,7 +549,7 @@ export function makeRollingDatabase<T>(
           setup
         )
         if (exists) {
-          cleanups.push(await setupDatabase(connection, setup, opts))
+          cleanups.push(await setupDatabase(pool, setup, opts))
           existingDatabases.push(row)
         }
       }

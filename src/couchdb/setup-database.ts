@@ -5,6 +5,7 @@ import {
   asMaybeExistsError,
   asMaybeNotFoundError
 } from './couch-error-cleaners'
+import { connectCouch, CouchPool } from './couch-pool'
 import {
   clusterHasDatabase,
   makeReplicatorDocuments,
@@ -42,14 +43,6 @@ export interface DatabaseSetup
 
 export interface SetupDatabaseOptions {
   /**
-   * The couch cluster name the current client is connected to,
-   * as described in the replicator setup document.
-   * This controls which databases and replications we create.
-   * Falls back to "default" if missing:
-   */
-  currentCluster?: string
-
-  /**
    * Describes which database and replications should exist
    * on each cluster
    */
@@ -76,44 +69,63 @@ export interface SetupDatabaseOptions {
   /** Logs status messages whenever we write things to Couch. */
   log?: (message: string) => void
 
+  /** Use this cluster for watching for changes. */
+  watchCluster?: string
+
   /** Logs error messages whenever something goes wrong. */
   onError?: (error: unknown) => void
+
+  /**
+   * @deprecated Pass a CouchPool to `setupDatabase` instead.
+   * The couch cluster name the current client is connected to,
+   * as described in the replicator setup document.
+   * This controls which databases and replications we create.
+   * Falls back to "default" if missing:
+   */
+  currentCluster?: string
 }
 
 /**
  * Ensures that the requested database exists in CouchDB.
  *
+ * The first parameter should be a `CouchPool` object.
+ * Passing anything else is deprecated.
+ *
  * Returns a cleanup function, which removes any background tasks.
  */
 export async function setupDatabase(
-  connectionOrUri: nano.ServerScope | string,
+  poolOrConnection: CouchPool | nano.ServerScope | string,
   setupInfo: DatabaseSetup,
   opts: SetupDatabaseOptions = {}
 ): Promise<() => void> {
   const { name, onChange, syncedDocuments = [] } = setupInfo
   const {
-    currentCluster,
+    currentCluster = 'default',
     disableWatching = false,
     log = console.log,
     replicatorSetup = setupInfo.replicatorSetup,
     syncOnly = false,
+    watchCluster,
     onError = error => {
       log(`Error while maintaining database "${name}": ${String(error)})`)
     }
   } = opts
-  const connection =
-    typeof connectionOrUri === 'string'
-      ? nano(connectionOrUri)
-      : connectionOrUri
+
+  const pool =
+    typeof poolOrConnection === 'string' || 'relax' in poolOrConnection
+      ? connectCouch(currentCluster, { [currentCluster]: poolOrConnection })
+      : poolOrConnection
 
   // Run the setup once to ensure the database exists:
-  if (!syncOnly) await doSetup(connection, setupInfo, opts)
-  const db = connection.db.use(name)
+  if (!syncOnly) await doSetups(pool, setupInfo, opts)
+  const connection =
+    watchCluster == null ? pool.default : pool.connect(watchCluster)
+  const db = connection.use(name)
 
   // Should we sync documents?
   const { exists } = clusterHasDatabase(
     replicatorSetup?.doc,
-    currentCluster,
+    watchCluster ?? pool.defaultName,
     setupInfo
   )
   if (!exists) return () => {}
@@ -133,7 +145,7 @@ export async function setupDatabase(
   if (replicatorSetup != null && !disableWatching) {
     cleanups.push(
       replicatorSetup.onChange(() => {
-        doSetup(connection, setupInfo, opts).catch(onError)
+        doSetups(pool, setupInfo, opts).catch(onError)
       })
     )
   }
@@ -141,44 +153,61 @@ export async function setupDatabase(
   return () => cleanups.forEach(cleanup => cleanup())
 }
 
+async function doSetups(
+  pool: CouchPool,
+  setupInfo: DatabaseSetup,
+  opts: SetupDatabaseOptions
+): Promise<void> {
+  const { replicatorSetup = setupInfo.replicatorSetup } = opts
+
+  for (const clusterName of pool.clusterNames) {
+    // Bail out if the current cluster doesn't have this database:
+    const { exists, replicated } = clusterHasDatabase(
+      replicatorSetup?.doc,
+      clusterName,
+      setupInfo
+    )
+
+    if (exists) {
+      await doSetup(pool, clusterName, setupInfo, opts)
+      if (replicated) {
+        await doReplication(pool, clusterName, setupInfo, opts)
+      }
+    }
+  }
+}
+
 /**
  * Performs the actual work of database setup.
  * This is a one-shot process, and doesn't subscribe to anything.
  */
 async function doSetup(
-  connection: nano.ServerScope,
+  pool: CouchPool,
+  clusterName: string,
   setupInfo: DatabaseSetup,
   opts: SetupDatabaseOptions
 ): Promise<void> {
   const { documents = {}, name, options, templates = {} } = setupInfo
-  const {
-    currentCluster,
-    dryRun = false,
-    log = console.log,
-    replicatorSetup = setupInfo.replicatorSetup
-  } = opts
+  const { dryRun = false, log = console.log } = opts
   const prefix = dryRun ? 'dry-run: ' : ''
 
-  // Bail out if the current cluster doesn't have this database:
-  const { exists, replicated } = clusterHasDatabase(
-    replicatorSetup?.doc,
-    currentCluster,
-    setupInfo
-  )
-  if (!exists) return
+  const connection = pool.maybeConnect(clusterName)
+  if (connection == null) return
 
   // Create the database if needed:
   const existingInfo = await connection.db.get(name).catch(error => {
     if (asMaybeNotFoundError(error) == null) throw error
   })
   if (existingInfo == null) {
-    log(`${prefix}Creating database "${name}".`)
+    log(`${prefix}Creating database "${name}" on cluster "${clusterName}".`)
 
     // Bail out (with logs) if this is a dry-run:
     if (dryRun) {
       const docs = [...Object.keys(documents), ...Object.keys(templates)]
       for (const id of docs) {
-        log(`${prefix}Writing document "${id}" in database "${name}".`)
+        log(
+          `${prefix}Writing document "${id}" in database "${name}" on cluster "${clusterName}".`
+        )
       }
       return
     }
@@ -197,7 +226,9 @@ async function doSetup(
     })
 
     if (!matchJson(documents[id], rest)) {
-      log(`${prefix}Writing document "${id}" in database "${name}".`)
+      log(
+        `${prefix}Writing document "${id}" in database "${name}" on cluster "${clusterName}".`
+      )
       if (dryRun) continue
       await db.insert({ _id, _rev, ...documents[id] })
     }
@@ -211,30 +242,77 @@ async function doSetup(
     })
 
     if (_rev == null) {
-      log(`${prefix}Writing document "${id}" in database "${name}".`)
+      log(
+        `${prefix}Writing document "${id}" in database "${name}" on cluster "${clusterName}".`
+      )
       if (dryRun) continue
       await db.insert({ _id, ...templates[id] })
     }
   }
+}
 
-  if (replicated) {
-    // Figure out the current username:
-    const sessionInfo = await connection.session()
-    const currentUsername: string = sessionInfo.userCtx.name
+async function doReplication(
+  pool: CouchPool,
+  clusterName: string,
+  setupInfo: DatabaseSetup,
+  opts: SetupDatabaseOptions
+): Promise<void> {
+  const replicatorSetup = mergeReplicatorCredentials(
+    pool,
+    opts.replicatorSetup?.doc ?? setupInfo.replicatorSetup?.doc
+  )
 
-    // Set up replication:
-    await doSetup(
-      connection,
-      {
-        name: '_replicator',
-        documents: makeReplicatorDocuments(
-          replicatorSetup?.doc,
-          currentCluster,
-          currentUsername,
-          setupInfo
-        )
-      },
-      opts
-    )
+  const connection = pool.maybeConnect(clusterName)
+  if (connection == null) return
+
+  // Figure out the current username:
+  const credential = pool.getCredential(clusterName)
+  const currentUsername =
+    credential?.username ??
+    // We can remove this slow fallback in the next breaking release,
+    // since this will only happen when putting a `nano.ServerScope` into
+    // CouchPool, which is deprecated:
+    (await connection.session()).userCtx.name
+
+  // Set up replication:
+  const documents = makeReplicatorDocuments(
+    replicatorSetup,
+    clusterName,
+    currentUsername,
+    setupInfo
+  )
+  await doSetup(pool, clusterName, { name: '_replicator', documents }, opts)
+}
+
+/**
+ * Adds credentials to a replicator setup document.
+ *
+ * The replicator document can contain credentials, but that's deprecated.
+ * Copy credentials from the CouchPool to the replicator document,
+ * so we remain backwards-compatible.
+ */
+function mergeReplicatorCredentials(
+  pool: CouchPool,
+  doc: ReplicatorSetupDocument | undefined
+): ReplicatorSetupDocument {
+  const merged: ReplicatorSetupDocument = { clusters: {} }
+  if (doc == null) return merged
+
+  for (const name of Object.keys(doc.clusters)) {
+    const row = doc.clusters[name]
+    merged.clusters[name] = row
+
+    // If we have credentials in the pool, use those:
+    const credential = pool.getCredential(name)
+    if (credential != null) {
+      const { url, username, password } = credential
+      const basicAuth =
+        username != null && password != null
+          ? btoa(`${username}:${password}`)
+          : undefined
+      merged.clusters[name] = { ...row, url, basicAuth }
+    }
   }
+
+  return merged
 }

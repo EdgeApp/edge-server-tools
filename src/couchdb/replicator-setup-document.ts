@@ -19,12 +19,16 @@ import { DatabaseSetup } from './setup-database'
  * For example, 'logs-*' matches 'logs-2019' and 'logs-2020'.
  */
 interface ReplicatorCluster {
-  /** The base URI to connect to. */
-  url: string
+  /**
+   * The base URI to connect to.
+   * @deprecated Use `CouchPool` to hold credentials
+   */
+  url?: string
 
   /**
    * The base64-encoded "username:password" used for authentication.
    * To generate this, run `btoa('username:password')` in a browser console.
+   * @deprecated Use `CouchPool` to hold credentials
    */
   basicAuth?: string
 
@@ -148,23 +152,31 @@ export function makeReplicatorDocuments(
     if (!replicated) continue
 
     if (includesName(cluster.pullFrom, remoteName)) {
-      documents[`${name}.from.${remoteName}`] = {
-        continuous: true,
-        create_target: false,
-        owner: currentUsername,
-        source: makeEndpoint(remoteCluster, name),
-        target: makeEndpoint(cluster, name)
+      const source = makeEndpoint(remoteCluster, name)
+      const target = makeEndpoint(cluster, name)
+      if (source != null && target != null) {
+        documents[`${name}.from.${remoteName}`] = {
+          continuous: true,
+          create_target: false,
+          owner: currentUsername,
+          source,
+          target
+        }
       }
     }
 
     if (includesName(cluster.pushTo, remoteName)) {
-      documents[`${name}.to.${remoteName}`] = {
-        continuous: true,
-        create_target: true,
-        create_target_params: options,
-        owner: currentUsername,
-        source: makeEndpoint(cluster, name),
-        target: makeEndpoint(remoteCluster, name)
+      const source = makeEndpoint(cluster, name)
+      const target = makeEndpoint(remoteCluster, name)
+      if (source != null && target != null) {
+        documents[`${name}.to.${remoteName}`] = {
+          continuous: true,
+          create_target: true,
+          create_target_params: options,
+          owner: currentUsername,
+          source,
+          target
+        }
       }
     }
   }
@@ -232,11 +244,14 @@ function includesName(list: string[], name: string): boolean {
 function makeEndpoint(
   cluster: ReplicatorCluster,
   db: string
-): ReplicatorEndpoint {
+): ReplicatorEndpoint | undefined {
+  if (cluster.url == null) return
   const url = `${cluster.url.replace(/[/]$/, '')}/${db}`
-  return cluster.basicAuth == null
-    ? url
-    : { url, headers: { Authorization: `Basic ${cluster.basicAuth}` } }
+  if (cluster.basicAuth == null) return url
+  return {
+    url,
+    headers: { Authorization: `Basic ${cluster.basicAuth}` }
+  }
 }
 
 const asClusterRowRaw = asObject({
