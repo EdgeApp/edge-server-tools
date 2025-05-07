@@ -62,6 +62,12 @@ export interface SetupDatabaseOptions {
    */
   disableWatching?: boolean
 
+  /**
+   * Don't create databases, design documents, or replications,
+   * but do print messages.
+   */
+  dryRun?: boolean
+
   /** Logs status messages whenever we write things to Couch. */
   log?: (message: string) => void
 
@@ -132,9 +138,11 @@ async function doSetup(
   const { documents = {}, name, options, templates = {} } = setupInfo
   const {
     currentCluster,
+    dryRun = false,
     log = console.log,
     replicatorSetup = setupInfo.replicatorSetup
   } = opts
+  const prefix = dryRun ? 'dry-run: ' : ''
 
   // Bail out if the current cluster doesn't have this database:
   const { exists, replicated } = clusterHasDatabase(
@@ -149,10 +157,20 @@ async function doSetup(
     if (asMaybeNotFoundError(error) == null) throw error
   })
   if (existingInfo == null) {
+    log(`${prefix}Creating database "${name}".`)
+
+    // Bail out (with logs) if this is a dry-run:
+    if (dryRun) {
+      const docs = [...Object.keys(documents), ...Object.keys(templates)]
+      for (const id of docs) {
+        log(`${prefix}Writing document "${id}" in database "${name}".`)
+      }
+      return
+    }
+
     await connection.db.create(name, options).catch(error => {
       if (asMaybeExistsError(error) == null) throw error
     })
-    log(`Created database "${name}"`)
   }
   const db: DocumentScope<unknown> = connection.db.use(name)
 
@@ -164,8 +182,9 @@ async function doSetup(
     })
 
     if (!matchJson(documents[id], rest)) {
+      log(`${prefix}Writing document "${id}" in database "${name}".`)
+      if (dryRun) continue
       await db.insert({ _id, _rev, ...documents[id] })
-      log(`Wrote document "${id}" in database "${name}".`)
     }
   }
 
@@ -177,8 +196,9 @@ async function doSetup(
     })
 
     if (_rev == null) {
+      log(`${prefix}Writing document "${id}" in database "${name}".`)
+      if (dryRun) continue
       await db.insert({ _id, ...templates[id] })
-      log(`Wrote document "${id}" in database "${name}".`)
     }
   }
 
