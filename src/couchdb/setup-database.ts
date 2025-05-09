@@ -68,6 +68,11 @@ export interface SetupDatabaseOptions {
    */
   dryRun?: boolean
 
+  /**
+   * Do not do any setup or replication work.
+   */
+  syncOnly?: boolean
+
   /** Logs status messages whenever we write things to Couch. */
   log?: (message: string) => void
 
@@ -87,9 +92,11 @@ export async function setupDatabase(
 ): Promise<() => void> {
   const { name, onChange, syncedDocuments = [] } = setupInfo
   const {
-    replicatorSetup = setupInfo.replicatorSetup,
+    currentCluster,
     disableWatching = false,
     log = console.log,
+    replicatorSetup = setupInfo.replicatorSetup,
+    syncOnly = false,
     onError = error => {
       log(`Error while maintaining database "${name}": ${String(error)})`)
     }
@@ -100,8 +107,16 @@ export async function setupDatabase(
       : connectionOrUri
 
   // Run the setup once to ensure the database exists:
-  const db = await doSetup(connection, setupInfo, opts)
-  if (db == null) return () => {}
+  if (!syncOnly) await doSetup(connection, setupInfo, opts)
+  const db = connection.db.use(name)
+
+  // Should we sync documents?
+  const { exists } = clusterHasDatabase(
+    replicatorSetup?.doc,
+    currentCluster,
+    setupInfo
+  )
+  if (!exists) return () => {}
 
   // Update or watch synced documents:
   const cleanups: Array<() => void> = []
@@ -134,7 +149,7 @@ async function doSetup(
   connection: nano.ServerScope,
   setupInfo: DatabaseSetup,
   opts: SetupDatabaseOptions
-): Promise<DocumentScope<unknown> | undefined> {
+): Promise<void> {
   const { documents = {}, name, options, templates = {} } = setupInfo
   const {
     currentCluster,
@@ -222,6 +237,4 @@ async function doSetup(
       opts
     )
   }
-
-  return db
 }
