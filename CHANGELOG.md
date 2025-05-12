@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.2.21 (2025-05-12)
+
+- added: A new `CouchPool` class that can be passed to `setupDatabase`. This will create databases across multiple clusters.
+- deprecated: Passing a `ServerScope` to `setupDatabase`. Use the `CouchPool` instead.
+- deprecated: `SetupDatabaseOptions.currentCluster`. Use the `CouchPool` instead.
 - deprecated: `autoReplication`. Use `setupDatabase` instead.
 
 ## 0.2.20 (2024-10-11)
