@@ -1,5 +1,9 @@
 # edge-server-tools
 
+## Unreleased
+
+- deprecated: `autoReplication`. Use `setupDatabase` instead.
+
 ## 0.2.20 (2024-10-11)
 
 - fixed: Add missing TypeScript entrypoint.
