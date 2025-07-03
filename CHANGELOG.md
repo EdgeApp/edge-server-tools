@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- fixed: Correctly ignore archived rolling databases.
+
 ## 0.2.21 (2025-05-12)
 
 - added: A new `CouchPool` class that can be passed to `setupDatabase`. This will create databases across multiple clusters.

@@ -17,6 +17,7 @@ import nano, {
 
 import {
   asCouchDoc,
+  connectCouch,
   CouchDoc,
   CouchPool,
   DatabaseSetup,
@@ -447,12 +448,12 @@ export function makeRollingDatabase<T>(
   }
 
   async function setup(
-    pool: CouchPool | ServerScope,
+    poolOrConnection: CouchPool | ServerScope,
     opts: SetupDatabaseOptions = {}
   ): Promise<() => void> {
     let cleanups: Array<() => void> = []
     const {
-      currentCluster,
+      currentCluster = 'default',
       disableWatching = false,
       log = console.log,
       watchCluster,
@@ -461,6 +462,14 @@ export function makeRollingDatabase<T>(
       },
       replicatorSetup = setupInfo.replicatorSetup
     } = opts
+
+    // Backwards-compatibility glue:
+    const pool =
+      'relax' in poolOrConnection
+        ? connectCouch(currentCluster, { [currentCluster]: poolOrConnection })
+        : poolOrConnection
+    const connection =
+      watchCluster == null ? pool.default : pool.connect(watchCluster)
 
     // Ensure we have a list database:
     const listDbSetup: DatabaseSetup = {
@@ -471,12 +480,6 @@ export function makeRollingDatabase<T>(
       }
     }
     const listDbCleanup = await setupDatabase(pool, listDbSetup, opts)
-    const connection =
-      'relax' in pool
-        ? pool
-        : watchCluster == null
-        ? pool.default
-        : pool.connect(watchCluster)
     const listDb = connection.use(listDbSetup.name)
 
     /**
@@ -545,7 +548,7 @@ export function makeRollingDatabase<T>(
         }
         const { exists } = clusterHasDatabase(
           replicatorSetup?.doc,
-          currentCluster,
+          pool.defaultName,
           setup
         )
         if (exists) {
