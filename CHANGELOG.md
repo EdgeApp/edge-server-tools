@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.22 (2025-07-03)
+
 - fixed: Correctly ignore archived rolling databases.
 
 ## 0.2.21 (2025-05-12)
