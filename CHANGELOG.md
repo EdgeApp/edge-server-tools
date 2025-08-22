@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- added: Accept a chunk size for rolling database streaming queries.
+
 ## 0.2.22 (2025-07-03)
 
 - fixed: Correctly ignore archived rolling databases.

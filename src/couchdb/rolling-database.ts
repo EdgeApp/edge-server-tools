@@ -408,11 +408,12 @@ export function makeRollingDatabase<T>(
     connection: ServerScope,
     design: string,
     view: string,
-    opts: RollingViewParams
+    opts: RollingViewParams & { chunkSize?: number }
   ): AsyncIterableIterator<CouchDoc<T>> {
     const {
       afterDate,
       partition,
+      chunkSize,
       // Native CouchDB options:
       ...rest
     } = opts
@@ -426,7 +427,7 @@ export function makeRollingDatabase<T>(
           : db.partitionedView(partition, design, view, allParams))
         return rows
       },
-      { afterDate }
+      { chunkSize, afterDate }
     )
   }
 
