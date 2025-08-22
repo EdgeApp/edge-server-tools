@@ -437,7 +437,9 @@ export function makeRollingDatabase<T>(
       if (database.startDate.valueOf() > date.valueOf()) continue
       return database.name
     }
-    throw new Error(`No rolling database exists for ${date.toISOString()}`)
+    throw new Error(
+      `No rolling database exists for ${name} at ${date.toISOString()}`
+    )
   }
 
   async function insert(
@@ -549,7 +551,7 @@ export function makeRollingDatabase<T>(
         }
         const { exists } = clusterHasDatabase(
           replicatorSetup?.doc,
-          pool.defaultName,
+          watchCluster,
           setup
         )
         if (exists) {
