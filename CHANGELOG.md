@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.23 (2025-09-11)
+
 - added: Accept a chunk size for rolling database streaming queries.
 - fixed: Use the `watchCluster` to filter rolling databases, not the default pool cluster.
 
