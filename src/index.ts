@@ -13,6 +13,7 @@ export {
   connectCouch
 } from './couchdb/couch-pool'
 
+export * from './couchdb/autoRotateCouch'
 export * from './couchdb/for-each-document'
 export * from './couchdb/js-design-document'
 export * from './couchdb/mango-design-document'
