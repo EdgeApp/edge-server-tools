@@ -15,15 +15,19 @@ interface CommonViewResponse {
  */
 export async function* viewToStream(
   callback: (params: DocumentViewParams) => Promise<CommonViewResponse>,
-  opts: { limit?: number } = {}
+  opts: {
+    chunkSize?: number
+    /** @deprecated use chunkSize */
+    limit?: number
+  } = {}
 ): AsyncIterableIterator<unknown> {
-  const { limit = 2048 } = opts
+  const { limit = 2048, chunkSize = limit } = opts
 
   let lastRow: { id: string; key: string } | undefined
   while (true) {
     const params: DocumentViewParams = {
       include_docs: true,
-      limit
+      limit: chunkSize
     }
     if (lastRow != null) {
       params.skip = 1
@@ -34,7 +38,7 @@ export async function* viewToStream(
     for (const row of rows) yield row.doc
 
     // Set up the next iteration:
-    if (rows.length < limit) break
+    if (rows.length < chunkSize) break
     lastRow = rows[rows.length - 1]
   }
 }
