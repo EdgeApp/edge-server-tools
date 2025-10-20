@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- added: `autoRotateCouch` helper function.
+- added: `chunkSize` and `startIndex` parameters to rolling database streaming methods.
+- deprecated: `limit` parameter for `viewToStream`. Use `chunkSize` instead.
+
 ## 0.2.23 (2025-09-11)
 
 - added: Accept a chunk size for rolling database streaming queries.

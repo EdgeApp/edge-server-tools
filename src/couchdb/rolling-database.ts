@@ -17,6 +17,7 @@ import nano, {
 
 import {
   asCouchDoc,
+  autoRotateCouch,
   connectCouch,
   CouchDoc,
   CouchPool,
@@ -69,6 +70,14 @@ export interface RollingViewParams extends DocumentViewParams {
   partition?: string
 }
 
+export interface RollingStreamParams extends RollingViewParams {
+  /** The number of documents to retrieve in each iteration */
+  chunkSize?: number
+
+  /** The preferred node to use for auto-rotation */
+  startIndex?: number
+}
+
 /**
  * Arguments to the rolling database reduce query.
  */
@@ -94,8 +103,8 @@ export interface RollingDatabase<T> {
   ) => Promise<Array<CouchDoc<T>>>
 
   listAsStream: (
-    connection: ServerScope,
-    params: RollingViewParams
+    connection: ServerScope | ServerScope[],
+    params: RollingStreamParams
   ) => AsyncIterableIterator<CouchDoc<T>>
 
   /**
@@ -118,10 +127,10 @@ export interface RollingDatabase<T> {
   ) => Promise<Array<CouchDoc<T>>>
 
   viewAsStream: (
-    connection: ServerScope,
+    connection: ServerScope | ServerScope[],
     design: string,
     view: string,
-    params: RollingViewParams
+    params: RollingStreamParams
   ) => AsyncIterableIterator<CouchDoc<T>>
 
   insert: (
@@ -225,18 +234,16 @@ export function makeRollingDatabase<T>(
   }
 
   async function* streamingQuery(
-    connection: ServerScope,
+    connections: ServerScope[],
     callback: (
       db: nano.DocumentScope<unknown>,
       params: DocumentViewParams
     ) => Promise<Array<{ id: string; key: string; doc?: unknown }>>,
-    opts: { afterDate?: Date; chunkSize?: number } = {}
+    opts: { afterDate?: Date; chunkSize?: number; startIndex?: number } = {}
   ): AsyncIterableIterator<CouchDoc<T>> {
-    const { afterDate, chunkSize = 2048, ...rest } = opts
+    const { afterDate, chunkSize = 2048, startIndex, ...rest } = opts
 
     for (const database of databases) {
-      const db = connection.use(database.name)
-
       let lastRow: { id: string; key: string } | undefined
       while (true) {
         const params: DocumentViewParams = {
@@ -249,7 +256,12 @@ export function makeRollingDatabase<T>(
           params.start_key = lastRow.key
           params.start_key_doc_id = lastRow.id
         }
-        const rows = await callback(db, params)
+        const rows = await autoRotateCouch(
+          connections,
+          async connection =>
+            await callback(connection.use(database.name), params),
+          { startIndex }
+        )
         for (const row of rows) yield asDoc(row.doc)
 
         // Set up the next iteration:
@@ -319,18 +331,20 @@ export function makeRollingDatabase<T>(
   }
 
   function listAsStream(
-    connection: ServerScope,
-    opts: RollingViewParams
+    connection: ServerScope | ServerScope[],
+    opts: RollingStreamParams
   ): AsyncIterableIterator<CouchDoc<T>> {
     const {
       afterDate,
+      chunkSize,
       partition,
+      startIndex,
       // Native CouchDB options:
       ...rest
     } = opts
 
     return streamingQuery(
-      connection,
+      Array.isArray(connection) ? connection : [connection],
       async (db, params) => {
         const allParams = { ...rest, ...params }
         const { rows } = await (partition == null
@@ -338,7 +352,7 @@ export function makeRollingDatabase<T>(
           : db.partitionedList(partition, allParams))
         return rows
       },
-      { afterDate }
+      { afterDate, chunkSize, startIndex }
     )
   }
 
@@ -405,21 +419,22 @@ export function makeRollingDatabase<T>(
   }
 
   function viewAsStream(
-    connection: ServerScope,
+    connection: ServerScope | ServerScope[],
     design: string,
     view: string,
-    opts: RollingViewParams & { chunkSize?: number }
+    opts: RollingStreamParams
   ): AsyncIterableIterator<CouchDoc<T>> {
     const {
       afterDate,
-      partition,
       chunkSize,
+      partition,
+      startIndex,
       // Native CouchDB options:
       ...rest
     } = opts
 
     return streamingQuery(
-      connection,
+      Array.isArray(connection) ? connection : [connection],
       async (db, params) => {
         const allParams = { ...rest, ...params, reduce: false }
         const { rows } = await (partition == null
@@ -427,7 +442,7 @@ export function makeRollingDatabase<T>(
           : db.partitionedView(partition, design, view, allParams))
         return rows
       },
-      { chunkSize, afterDate }
+      { afterDate, chunkSize, startIndex }
     )
   }
 
