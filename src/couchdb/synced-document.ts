@@ -1,4 +1,4 @@
-import { asMaybe, Cleaner, uncleaner } from 'cleaners'
+import { Cleaner, uncleaner } from 'cleaners'
 import { DocumentScope } from 'nano'
 import { makeEvent, OnEvent } from 'yavent'
 
@@ -37,17 +37,22 @@ export interface SyncedDocument<T> {
  * The fallback will be the initial value of the returned babysitter,
  * until `sync` is called to sync with the database.
  */
+export interface SyncedDocumentOptions {
+  cleanFailStrategy?: 'preserve' | 'reset'
+  onCleanFail?: (error: unknown) => void
+}
+
 export function syncedDocument<T>(
   id: string,
-  cleaner: Cleaner<T>
+  cleaner: Cleaner<T>,
+  opts: SyncedDocumentOptions = {}
 ): SyncedDocument<T> {
-  const fallback = cleaner({})
-  const asDocument = asMaybe(cleaner, fallback)
-  const wasDocument = uncleaner(asDocument)
+  const { cleanFailStrategy = 'reset', onCleanFail } = opts
+  const wasDocument = uncleaner(cleaner)
   const [on, emit] = makeEvent<T>()
 
   const out: SyncedDocument<T> = {
-    doc: fallback,
+    doc: cleaner({}),
     rev: undefined,
     id,
     onChange: on,
@@ -57,7 +62,17 @@ export function syncedDocument<T>(
         if (asMaybeNotFoundError(error) == null) throw error
         return { _id: id, _rev: undefined }
       })
-      const clean = asDocument(rest)
+
+      let clean: T
+      try {
+        clean = cleaner(rest)
+      } catch (error) {
+        try {
+          onCleanFail?.(error)
+        } catch {}
+        clean = cleanFailStrategy === 'preserve' ? out.doc : cleaner({})
+      }
+
       const dirty = wasDocument(clean)
       if (_rev == null || !matchJson(dirty, rest)) {
         const result = await db.insert({ _id, _rev, ...dirty })
