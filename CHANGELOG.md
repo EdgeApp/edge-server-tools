@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- added: `syncedDocument` accepts an optional `SyncedDocumentOptions` object with `cleanFailStrategy` (`'preserve'` to keep the last good value, `'reset'` to revert to defaults) and `onCleanFail` callback for notification when the cleaner rejects a document.
+
 ## 0.2.23 (2025-09-11)
 
 - added: Accept a chunk size for rolling database streaming queries.
