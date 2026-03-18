@@ -1,6 +1,7 @@
 import { expect } from 'chai'
 import { asNumber, asObject, asOptional, asString } from 'cleaners'
 import { describe, it } from 'mocha'
+import { DocumentScope } from 'nano'
 
 import { syncedDocument } from '../../src/couchdb/synced-document'
 
@@ -12,8 +13,8 @@ const asConfig = asObject({
 type Config = ReturnType<typeof asConfig>
 
 function makeMockDb(
-  store: { [id: string]: { _rev: string; [key: string]: unknown } } = {}
-): any {
+  store: Record<string, { _rev: string; [key: string]: unknown }> = {}
+): DocumentScope<unknown> {
   let revCounter = 0
   return {
     get: async (id: string) => {
@@ -32,7 +33,7 @@ function makeMockDb(
       store[_id] = { ...rest, _rev: rev }
       return { ok: true, id: _id, rev }
     }
-  }
+  } as any
 }
 
 describe('syncedDocument', function () {
