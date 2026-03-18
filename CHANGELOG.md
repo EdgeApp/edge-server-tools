@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.24 (2026-03-18)
+
 - added: `syncedDocument` accepts an optional `SyncedDocumentOptions` object with `cleanFailStrategy` (`'preserve'` to keep the last good value, `'reset'` to revert to defaults) and `onCleanFail` callback for notification when the cleaner rejects a document.
 
 ## 0.2.23 (2025-09-11)
