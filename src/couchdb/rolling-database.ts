@@ -459,6 +459,7 @@ export function makeRollingDatabase<T>(
       currentCluster = 'default',
       disableWatching = false,
       log = console.log,
+      syncOnly = false,
       watchCluster,
       onError = error => {
         log(`Error while maintaining "${name}" databases: ${String(error)}`)
@@ -514,27 +515,38 @@ export function makeRollingDatabase<T>(
         list = [{ archived, name, startDate }, ...list]
       }
 
-      // Create past databases if the list is empty:
-      if (list.length === 0) {
-        if (archiveStart == null) {
-          const [date, suffix] = pickPeriodicMonth(now, period, false)
-          await addDb(`${name}-${suffix}`, date)
-        } else {
-          for (
-            let [date, suffix] = pickPeriodicMonth(archiveStart, 'year', false);
-            date.valueOf() < now.valueOf();
-            [date, suffix] = pickPeriodicMonth(date, 'year', true)
-          ) {
+      // Only the authoritative (non-syncOnly) process may mutate the list.
+      // A syncOnly process reads the list and targets queries, but must never
+      // append a doc it cannot back with a physical database:
+      if (!syncOnly) {
+        // Create past databases if the list is empty:
+        if (list.length === 0) {
+          if (archiveStart == null) {
+            const [date, suffix] = pickPeriodicMonth(now, period, false)
+            await addDb(`${name}-${suffix}`, date)
+          } else {
+            for (
+              let [date, suffix] = pickPeriodicMonth(
+                archiveStart,
+                'year',
+                false
+              );
+              date.valueOf() < now.valueOf();
+              [date, suffix] = pickPeriodicMonth(date, 'year', true)
+            ) {
+              await addDb(`${name}-${suffix}`, date)
+            }
+          }
+        }
+
+        // Always keep one spare database in the future:
+        if (list.length > 0) {
+          const lastStart = list[0].startDate
+          if (lastStart.valueOf() < now.valueOf()) {
+            const [date, suffix] = pickPeriodicMonth(now, period, true)
             await addDb(`${name}-${suffix}`, date)
           }
         }
-      }
-
-      // Always keep one spare database in the future:
-      const lastStart = list[0].startDate
-      if (lastStart.valueOf() < now.valueOf()) {
-        const [date, suffix] = pickPeriodicMonth(now, period, true)
-        await addDb(`${name}-${suffix}`, date)
       }
 
       // Reset the cleanup list:

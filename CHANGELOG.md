@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- fixed: Do not create rolling-database list entries on `syncOnly` processes, so a sync-only process can no longer register a period database it will not physically create.
+
 ## 0.2.24 (2026-03-18)
 
 - added: `syncedDocument` accepts an optional `SyncedDocumentOptions` object with `cleanFailStrategy` (`'preserve'` to keep the last good value, `'reset'` to revert to defaults) and `onCleanFail` callback for notification when the cleaner rejects a document.
