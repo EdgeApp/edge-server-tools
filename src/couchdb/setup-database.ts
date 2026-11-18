@@ -2,6 +2,7 @@ import nano, { DatabaseCreateParams, DocumentScope } from 'nano'
 
 import { matchJson } from '../util/match-json'
 import {
+  asMaybeConflictError,
   asMaybeExistsError,
   asMaybeNotFoundError
 } from './couch-error-cleaners'
@@ -220,33 +221,64 @@ async function doSetup(
 
   // Update documents:
   for (const id of Object.keys(documents)) {
-    const { _id, _rev, ...rest } = await db.get(id).catch(error => {
-      if (asMaybeNotFoundError(error) == null) throw error
-      return { _id: id, _rev: undefined }
-    })
+    await retryOnConflict(async () => {
+      const { _id, _rev, ...rest } = await db.get(id).catch(error => {
+        if (asMaybeNotFoundError(error) == null) throw error
+        return { _id: id, _rev: undefined }
+      })
 
-    if (!matchJson(documents[id], rest)) {
-      log(
-        `${prefix}Writing document "${id}" in database "${name}" on cluster "${clusterName}".`
-      )
-      if (dryRun) continue
-      await db.insert({ _id, _rev, ...documents[id] })
-    }
+      if (!matchJson(documents[id], rest)) {
+        log(
+          `${prefix}Writing document "${id}" in database "${name}" on cluster "${clusterName}".`
+        )
+        if (dryRun) return
+        await db.insert({ _id, _rev, ...documents[id] })
+      }
+    })
   }
 
   // Create template documents:
   for (const id of Object.keys(templates)) {
-    const { _id, _rev } = await db.get(id).catch(error => {
-      if (asMaybeNotFoundError(error) == null) throw error
-      return { _id: id, _rev: undefined }
-    })
+    await retryOnConflict(async () => {
+      const { _id, _rev } = await db.get(id).catch(error => {
+        if (asMaybeNotFoundError(error) == null) throw error
+        return { _id: id, _rev: undefined }
+      })
 
-    if (_rev == null) {
-      log(
-        `${prefix}Writing document "${id}" in database "${name}" on cluster "${clusterName}".`
-      )
-      if (dryRun) continue
-      await db.insert({ _id, ...templates[id] })
+      if (_rev == null) {
+        log(
+          `${prefix}Writing document "${id}" in database "${name}" on cluster "${clusterName}".`
+        )
+        if (dryRun) return
+        await db.insert({ _id, ...templates[id] })
+      }
+    })
+  }
+}
+
+/**
+ * How many times a setup step may write a document
+ * before we give up on conflicts.
+ */
+const MAX_WRITE_ATTEMPTS = 5
+
+/**
+ * Runs a read-then-write setup step,
+ * and runs it again if the write fails with a conflict.
+ *
+ * Replication can deliver a document between our read and our write,
+ * which makes CouchDB reject the write. Reading again usually shows
+ * the document we wanted, so the step has nothing left to do.
+ * If not, the step writes again, on top of the new revision.
+ */
+async function retryOnConflict(step: () => Promise<void>): Promise<void> {
+  for (let attempt = 1; ; ++attempt) {
+    try {
+      await step()
+      return
+    } catch (error) {
+      if (asMaybeConflictError(error) == null) throw error
+      if (attempt >= MAX_WRITE_ATTEMPTS) throw error
     }
   }
 }

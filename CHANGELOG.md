@@ -3,6 +3,7 @@
 ## Unreleased
 
 - fixed: Do not create rolling-database list entries on `syncOnly` processes, so a sync-only process can no longer register a period database it will not physically create.
+- fixed: Do not fail `setupDatabase` when replication delivers a document between setup's read and its write. After a write conflict, setup reads the document again and writes again only if it still needs to, up to 5 attempts in all.
 
 ## 0.2.24 (2026-03-18)
 
